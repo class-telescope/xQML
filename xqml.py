@@ -1,3 +1,4 @@
+from __future__ import division
 from scipy import special, linalg, sparse
 import sys
 import timeit
@@ -6,6 +7,119 @@ import math
 import healpy as hp
 import random as rd
 import string
+
+
+
+
+
+
+
+
+class xQML(object):
+  """
+  (Cross-) power spectra estimation using the QML method.
+  Vanneste et al. 2018
+  
+  Example
+  -------
+  xqml = xQML(mask, bins, clth)
+  
+  """
+  def __init__(self, mask, bins, clth, lmax=None, Pl=None, fwhm=0., polar=True, temp=False, EBTB=False):
+    """
+    Parameters
+    ----------
+    mask : boolean Healpix map
+    Mask defining the region of interest (of value True)
+    
+    """
+    
+    npix = len(mask)
+    self.nside = hp.npix2nside(npix)
+    self.ipok = np.arange(npix)[np.array(mask,bool)]
+    self.npix = len(self.ipok)
+    self.ellbins = bins
+    self.Slmax = 3*self.nside-1 if lmax is None else lmax
+    
+    self.bl = hp.gauss_beam(np.deg2rad(fwhm), lmax=self.Slmax+1)
+    self.stokes, self.istokes = self._getstokes( polar=polar, temp=temp)
+    self.spec,   self.ispec   = self._getspec(   polar=polar, temp=temp, EBTB=EBTB)
+    self.nstokes = len(self.stokes)
+    self.nspec   = len(self.spec)
+    
+    if Pl is None:
+      self.Pl, self.S = compute_ds_dcb( self.ellbins, self.nside, self.ipok, self.bl, clth, self.Slmax,
+                                        polar=polar, temp=temp, EBTB=EBTB, pixwining=True, timing=True, MC=False)
+    else:
+      self.Pl = Pl
+      self.S = self._CorrelationMatrix( clth)
+    
+    self.Pl = self.Pl.reshape(-1, self.nstokes*self.npix, self.nstokes*self.npix)
+  
+  def construct_esti(self, NA, NB):
+    self.invCa = linalg.inv(self.S+NA)
+    self.invCb = linalg.inv(self.S+NB)
+    self.E = El( self.invCa, self.invCb, self.Pl)
+    self.invW = linalg.inv( CrossWindowFunction(self.E, self.Pl))
+    
+  def get_spectra(self, map1, map2):
+    d1 = map1 if np.size( map1) == self.nstokes*self.npix else map1[self.istokes,self.mask]
+    d2 = map2 if np.size( map2) == self.nstokes*self.npix else map2[self.istokes,self.mask]
+    
+    yl = yQuadEstimator( d1.ravel(), d2.ravel(), self.E)
+    cl = ClQuadEstimator( self.invW, yl)
+    return( cl.reshape( self.nspec,-1))
+  
+  def get_covariance(self):
+    G = CrossGisherMatrix( self.E, self.S)
+    V = CovAB(self.invW, G)
+    return(V)
+
+  def _getstokes(self, polar=True, temp=False):
+    stokes=[]
+    if temp:
+      stokes.append( 'I')
+    if polar:
+      stokes.extend( ['Q','U'])
+    return stokes, [['I','Q','U'].index(s) for s in stokes]
+
+  def _getspec(self, polar=True, temp=False, EBTB=False):
+    allspec = ['TT','EE','BB','TE','EB','TB']
+    der = []
+    if temp:
+      der.append( 'TT')
+    if polar:
+      der.extend( ['EE','BB'])
+      if temp:
+        der.append( 'TE')
+      if EBTB:
+        if temp:
+          der.extend(['TE','EB','TB'])
+        else:
+          der.append( 'EB')
+    return der, [allspec.index(c) for c in der]
+
+  def _CorrelationMatrix(self, clth):
+    '''
+    Compute correlation matrix S = sum_l Pl*Cl
+    '''
+    model = clth[self.ispec][:,2:int(self.ellbins[-1])].flatten()
+    return np.sum(self.Pl*model[:,None, None], 0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -104,6 +218,8 @@ def F2l2(z,lmax):
     bla[1]=0 # ??
     return bla
 
+
+
 ################################# Rotation Angles ###############################################
 def polrotangle(ri,rj):
     z=np.array([0.,0.,1.])
@@ -143,6 +259,12 @@ def polrotangle(ri,rj):
     return cos2a,sin2a
 
 
+
+
+
+
+
+
 ############################################## ds_dcb ##################################################
 # compute_ds_dcb calls either covth_bins_fast or covth_bins_fast_compressed
 
@@ -158,26 +280,7 @@ def compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=True,temp=True,EBTB
     "WARNING : Slmax < lmax"
 
   # Slmax+=1 # for max binning value
-
-  allStoke=['I','Q','U']
-  if EBTB:
-    der=['TT','EE','BB','TE','EB','TB']
-    ind=[1,2,3,4,5,6]
-  else:
-    der=['TT','EE','BB','TE']
-    ind=[1,2,3,4] 
-  if  not temp:
-    allStoke=['Q','U']
-    if EBTB:
-      der=['EE','BB','EB']
-      ind=[2,3,5]
-    else:
-      der=['EE','BB']
-      ind=[2,3]
-  if not polar:
-    allStoke=['I']
-    der=['TT']
-    ind=[1]
+  allStoke,der,ind = getstokes(polar=polar,temp=temp,EBTB=EBTB)
   print('Stokes parameters :',allStoke)
   print('Derivatives w.r.t. :',der)
 
@@ -188,14 +291,11 @@ def compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=True,temp=True,EBTB
   allcosang=np.dot(np.transpose(rpix),rpix)
   allcosang[allcosang>1]=1.
   allcosang[allcosang<-1]=-1.
-  # maxiangular = 180*math.acos(min(allcosang.flatten()))/np.pi
-  # print("theoretical maximum angular extend = " + str(maxiangular))
 
   ### dimensions of the large matrix and loop for filling it
   nstokes=len(allStoke)
   nbins=len(ellbins)-1
   npix=len(ipok)
-  # dcov=np.zeros((nder,nbins,nstokes*npix,nstokes*npix))
   
   start = timeit.default_timer()
   if Sonly:
@@ -206,11 +306,8 @@ def compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=True,temp=True,EBTB
     return Smatrix
 
   if MC:
-    # dcov, Smatrix = covth_bins_fast_compressed(ellbins,nside,ipok,allcosang,bl,clth[:,:np.max(ellbins)+1],polar=polar,temp=temp, EBTB=False, pixwining=pixwining, timing=timing) 
-    # dcov, Smatrix = covth_bins_fast_compressed(ellbins,nside,ipok,allcosang,bl,clth,Slmax,polar=polar,temp=temp, EBTB=False, pixwining=pixwining, timing=timing) 
     dcov, Smatrix = covth_bins_MC(ellbins,nside,ipok,allcosang,bl,clth,Slmax,MC,polar=polar,temp=temp, EBTB=EBTB, pixwining=pixwining, timing=timing) 
   else:
-    # dcov, Smatrix = covth_bins_fast(ellbins,nside,ipok,allcosang,bl,clth[:,:np.max(ellbins)+1],polar=polar,temp=temp, EBTB=False, pixwining=pixwining, timing=timing) 
     dcov, Smatrix = covth_bins_fast(ellbins,nside,ipok,allcosang,bl,clth,Slmax,polar=polar,temp=temp, EBTB=EBTB, pixwining=pixwining, timing=timing) 
     
   stop = timeit.default_timer()
@@ -221,7 +318,7 @@ def compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=True,temp=True,EBTB
 
 
 
-def covth_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,temp=True,EBTB=False,allinone=False, pixwining=False, timing=False):
+def covth_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,temp=True,EBTB=False, pixwining=False, timing=False):
   '''
   Can be particularly slow on sl7 ! 
   '''
@@ -241,26 +338,7 @@ def covth_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True
   print('maxell:',maxell)
 
   #### define Stokes
-  allStoke=['I','Q','U']
-  if EBTB:
-    der=['TT','EE','BB','TE','EB','TB']
-    ind=[1,2,3,4,5,6]
-  else:
-    der=['TT','EE','BB','TE']
-    ind=[1,2,3,4] 
-  if not temp:
-    allStoke=['Q','U']
-    if EBTB:
-      der=['EE','BB','EB']
-      ind=[2,3,5]
-    else:
-      der=['EE','BB']
-      ind=[2,3]
-  if not polar:
-    allStoke=['I']
-    der=['TT']
-    ind=[1]
-
+  allStoke,der,ind = getstokes(polar=polar,temp=temp,EBTB=EBTB)
   nder=len(der)
 
   #### define pixels
@@ -332,14 +410,12 @@ def covth_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True
 
 
 
-def S_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,temp=True,EBTB=False,allinone=False, pixwining=False, timing=False):
+def S_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,temp=True,EBTB=False, pixwining=False, timing=False):
   '''
   Can be particularly slow on sl7 ! 
   '''
   if nsimu==1:
     nsimu=(12*nside**2)*10*(int(polar)+1)#10000
-    # if nside>=16:mcPl, mcS = xqml.compute_ds_dcb(ellbins,nside,ipok,bl,ClFidu,Slmax,polar=True,temp=False, pixwining=pixwining, timing=True, MC=MC)
-      # nsimu=100000
   print("nsimu=", nsimu)
   lmax=ellbins[-1] #
   ell=np.arange(np.min(ellbins),np.max(ellbins)+1)
@@ -354,26 +430,7 @@ def S_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,tem
   print('maxell:',maxell)
 
   #### define Stokes
-  allStoke=['I','Q','U']
-  if EBTB:
-    der=['TT','EE','BB','TE','EB','TB']
-    ind=[1,2,3,4,5,6]
-  else:
-    der=['TT','EE','BB','TE']
-    ind=[1,2,3,4] 
-  if not temp:
-    allStoke=['Q','U']
-    if EBTB:
-      der=['EE','BB','EB']
-      ind=[2,3,5]
-    else:
-      der=['EE','BB']
-      ind=[2,3]
-  if not polar:
-    allStoke=['I']
-    der=['TT']
-    ind=[1]
-
+  allStoke,der,ind = getstokes(polar=polar,temp=temp,EBTB=EBTB)
   nder=len(der)
 
   #### define pixels
@@ -418,24 +475,13 @@ def S_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,tem
         ClthOne[l,1]= masks[l % nbins]*norm
         ClthOne[l,2]= masks[l % nbins]*norm
         ClthOne[l,4]= masks[l % nbins]*norm #-nbins*(l/nbins)]*norm # couille ici
-    # dcov = np.zeros((nder*(nbins), 2*npix, 2*npix))
-    # start = timeit.default_timer()
-    # for l in np.arange((nder*nbins)):
-    #   progress_bar(l,nder*(nbins), -(start-timeit.default_timer()))
-    #   dcov[l] = np.cov(np.array([np.array(hp.synfast(ClthOne[l], nside, lmax=Slmax, new=True,verbose=False))[1:3,ipok].flatten() for s in np.arange(nsimu)]).reshape(nsimu, 2*npix), rowvar=False)
 
-    # dcov = dcov.reshape(nder,nbins,2*npix,2*npix)
     S = np.cov(np.array([np.array(hp.synfast(clth[:,:Slmax+2]*norm, nside, lmax=Slmax, new=True,verbose=False))[1:3,ipok].flatten() for s in np.arange(nsimu)]).reshape(nsimu, 2*npix), rowvar=False)
   
   else:
     ClthOne = np.zeros((nbins, (Slmax+2)))
     for l in np.arange((nbins)):
       ClthOne[l]= masks[l]*norm
-    # dcov = np.zeros(((nbins), npix, npix))
-    # for l in np.arange((nbins)):
-    #   progress_bar(l,(lmax+1), -(start-timeit.default_timer()))
-    #   dcov[l] = np.cov(np.array([hp.synfast(ClthOne[l], nside, lmax=Slmax, verbose=False)[ipok] for s in np.arange(nsimu)]).reshape(nsimu, npix), rowvar=False)
-    # dcov = dcov.reshape(1,nbins,npix, npix)
     S = np.cov(np.array([np.array(hp.synfast(clth[:, :Slmax+2]*norm, nside, lmax=Slmax, new=True,verbose=False))[0,ipok].flatten() for s in np.arange(nsimu)]).reshape(nsimu, npix), rowvar=False)
 
   stop = timeit.default_timer()
@@ -444,7 +490,8 @@ def S_bins_MC(ellbins,nside,ipok,allcosang,bl,clth, Slmax, nsimu, polar=True,tem
   return S
 
 
-def covth_bins_fast(ellbins,nside,ipok,allcosang,bl,clth, Slmax, polar=True,temp=True,EBTB=False,allinone=False, pixwining=False, timing=False ):
+
+def covth_bins_fast(ellbins,nside,ipok,allcosang,bl,clth, Slmax, polar=True, temp=True, EBTB=False, pixwining=False, timing=False):
   '''
   Computes ds_dcb[nspec, nbins, 2*npix, 2*npix] and signal matrix S[2*npix, 2*npix]
   Fast because :
@@ -466,26 +513,7 @@ def covth_bins_fast(ellbins,nside,ipok,allcosang,bl,clth, Slmax, polar=True,temp
   print('maxell:',maxell)
 
   #### define Stokes
-  allStoke=['I','Q','U']
-  if EBTB:
-    der=['TT','EE','BB','TE','EB','TB']
-    ind=[1,2,3,4,5,6]
-  else:
-    der=['TT','EE','BB','TE']
-    ind=[1,2,3,4] 
-  if  not temp:
-    allStoke=['Q','U']
-    if EBTB:
-      der=['EE','BB','EB']
-      ind=[2,3,5]
-    else:
-      der=['EE','BB']
-      ind=[2,3]
-  if not polar:
-    allStoke=['I']
-    der=['TT']
-    ind=[1]
-
+  allStoke,der,ind = getstokes(polar=polar,temp=temp,EBTB=EBTB)
   nder=len(der)
 
   #### define pixels
@@ -647,7 +675,7 @@ def covth_bins_fast(ellbins,nside,ipok,allcosang,bl,clth, Slmax, polar=True,temp
 
 
 
-def S_bins_fast(ellbins,nside,ipok,allcosang,bl,clth, Slmax, polar=True,temp=True,EBTB=False,allinone=False, pixwining=False, timing=False ):
+def S_bins_fast(ellbins,nside,ipok,allcosang,bl,clth, Slmax, polar=True,temp=True,EBTB=False, pixwining=False, timing=False ):
   '''
   Computes signal matrix S[2*npix, 2*npix]
   Fast because :
@@ -878,7 +906,7 @@ def CrossFisherMatrix(El, Pl, expend=False):
     FAB = np.array([np.sum(El[il]*Pl[jl]) for il in lrange for jl in lrange]).reshape(lmax,lmax) #pas de transpose car symm
   return FAB
 
-def CrossWindowFunction(El, Pl, expend=False):
+def CrossWindowFunction(El, Pl):
   '''
   Compute Tegmark cross (or auto) window matrix Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
   Equivalent to Fisher matrix Fll when Tegmark B-matrix = 1
@@ -888,7 +916,7 @@ def CrossWindowFunction(El, Pl, expend=False):
   Wll = np.array([np.sum(El[il]*Pl[jl]) for il in lrange for jl in lrange]).reshape(lmax,lmax) #pas de transpose car symm
   return Wll
 
-def CrossWindowFunctionLong(invCAA, invCBB, Pl, expend=False):
+def CrossWindowFunctionLong(invCAA, invCBB, Pl):
   '''
   Compute Tegmark cross (or auto) window matrix Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
   Equivalent to Fisher matrix Fll when Tegmark B-matrix = 1
@@ -900,14 +928,14 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl, expend=False):
 
 def CrossMisherMatrix(El, CAA, CBB):
   '''
-  Compute matrix GAB = Trace[El.CAB.El.CAB] (see paper for definition)
+  Compute matrix MAB = Trace[El.CAA.El.CBB] (see paper for definition)
   '''
   lmax = len(El)
   lrange = np.arange(lmax)
   El_CAA = np.array([np.dot(CAA,El[il]) for il in lrange])
   El_CBB = np.array([np.dot(CBB,El[il]) for il in lrange])
-  GAB = np.array([np.sum(El_CAA[il]*El_CBB[jl].T) for il in lrange for jl in lrange]).reshape(lmax,lmax) 
-  return GAB
+  MAB = np.array([np.sum(El_CAA[il]*El_CBB[jl].T) for il in lrange for jl in lrange]).reshape(lmax,lmax) 
+  return MAB
 
 def CrossGisherMatrix(El, CAB):
   '''
