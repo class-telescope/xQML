@@ -20,3 +20,17 @@ Librairies needed are :
 - numpy
 - healpy
 
+
+List of several routines:
+Pl, S = compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=,temp=,EBTB=, pixwining=, timing=, Sonly=)
+El = El(invCAA, invCBB, Pl, Bll=None)
+W = CrossWindowFunction(El, Pl)
+
+or directly without El (but longer)
+W = CrossWindowFunctionLong(invCAA, invCBB, Pl)
+
+G = CrossGisherMatrix(El, CAB)
+V = CovAB(invW, GAB)
+
+yl = yQuadEstimator(dA, dB, El)
+cl = ClQuadEstimator(invW, yl)
