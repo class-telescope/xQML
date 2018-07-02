@@ -21,16 +21,16 @@ Librairies needed are :
 - healpy
 
 
-List of several routines:
-Pl, S = compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=,temp=,EBTB=, pixwining=, timing=, Sonly=)
-El = El(invCAA, invCBB, Pl, Bll=None)
-W = CrossWindowFunction(El, Pl)
+List of several routines:<br>
+Pl, S = compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=,temp=,EBTB=, pixwining=, timing=, Sonly=)<br>
+El = El(invCAA, invCBB, Pl, Bll=None)<br>
+W = CrossWindowFunction(El, Pl)<br>
 
-or directly without El (but longer)
-W = CrossWindowFunctionLong(invCAA, invCBB, Pl)
+or directly without El (but longer)<br>
+W = CrossWindowFunctionLong(invCAA, invCBB, Pl)<br>
 
-G = CrossGisherMatrix(El, CAB)
-V = CovAB(invW, GAB)
+G = CrossGisherMatrix(El, CAB)<br>
+V = CovAB(invW, GAB)<br>
 
-yl = yQuadEstimator(dA, dB, El)
-cl = ClQuadEstimator(invW, yl)
+yl = yQuadEstimator(dA, dB, El)<br>
+cl = ClQuadEstimator(invW, yl)<br>
