@@ -24,10 +24,7 @@ nbins=len(ellbins)-1
 t,p=hp.pix2ang( nside, range(hp.nside2npix(nside)))
 mask = np.ones(hp.nside2npix(nside),bool)
 mask[abs(90-rad2deg(t)) < 10] = False
-
-ip=arange(hp.nside2npix(nside))
-ipok=ip[mask]
-npix=len(ipok)
+npix = sum(mask)
 
 fwhm = 0.5
 bl=gauss_beam(deg2rad(fwhm), lmax=Slmax+1)
@@ -48,6 +45,9 @@ dm = cmb[1:,mask] + noise
 
 
 ###################################### Compute ds_dcb ######################################
+ip=arange(hp.nside2npix(nside))
+ipok=ip[mask]
+
 Pl, S = xqml.compute_ds_dcb(ellbins,nside,ipok,bl,clth,Slmax,polar=True,temp=False, EBTB=False, pixwining=True, timing=True, MC=False)
 Pl = Pl.reshape((nder)*(np.shape(Pl)[1]), 2*npix, 2*npix)
 

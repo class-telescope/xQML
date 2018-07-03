@@ -18,11 +18,13 @@ import string
 class xQML(object):
   """
   (Cross-) power spectra estimation using the QML method.
-  Vanneste et al. 2018
+  [Vanneste et al. 2018]
   
   Example
   -------
-  xqml = xQML(mask, bins, clth)
+  esti = xqml.xQML(mask,ellbins, clth, Pl=Pl, fwhm=fwhm)
+  esti.construct_esti( NoiseVar, NoiseVar)
+  cl = esti.get_spectra( dm1, dm2)
   
   """
   def __init__(self, mask, bins, clth, lmax=None, Pl=None, fwhm=0., polar=True, temp=False, EBTB=False):
@@ -972,10 +974,9 @@ def ClQuadEstimator(invW, y):
   Cl = np.dot(invW,y) 
   return Cl
 
-def blEstimator(NoiseN, El):
+def biasQuadEstimator(NoiseN, El):
   '''
-  Compute bias term bl such that Cl = Fll^-1 . ( yl + bl)
-  Not to be confonded with beam function bl(fwhm)
+  Compute bias term bl such that Cl = Fll^-1 . ( yl + bias)
   '''
   lrange = np.arange((len(El)))
   return np.array([np.sum(NoiseN*El[l]) for l in lrange])
