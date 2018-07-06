@@ -13,6 +13,10 @@ This is the generalisation to cross-correlation of QML methods
 The code is UNDER DEVELOPMENT !
 
 For now it is a simple python librairie.
+
+To use:
+> import xqml
+
 We are working to externalise CPU intensive routines and use OpenMP.
 
 Librairies needed are :
@@ -21,16 +25,3 @@ Librairies needed are :
 - healpy
 
 
-List of several routines:<br>
-Pl, S = compute_ds_dcb(ellbins,nside,ipok,bl, clth, Slmax, polar=,temp=,EBTB=, pixwining=, timing=, Sonly=)<br>
-El = El(invCAA, invCBB, Pl, Bll=None)<br>
-W = CrossWindowFunction(El, Pl)<br>
-
-or directly without El (but longer)<br>
-W = CrossWindowFunctionLong(invCAA, invCBB, Pl)<br>
-
-G = CrossGisherMatrix(El, CAB)<br>
-V = CovAB(invW, GAB)<br>
-
-yl = yQuadEstimator(dA, dB, El)<br>
-cl = ClQuadEstimator(invW, yl)<br>
