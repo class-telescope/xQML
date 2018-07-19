@@ -1,6 +1,7 @@
 from pylab import *
 import astropy.io.fits as fits
 import xqml
+import timeit
 import numpy as np
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -10,7 +11,7 @@ nside = 8
 lmax = 3*nside-1
 Slmax = 3*nside-1
 deltal = 1
-clth = read_cl( 'planck_base_planck_2015_TTlowP.fits')
+clth = hp.read_cl( 'planck_base_planck_2015_TTlowP.fits')
 lth = arange(2,lmax+1)
 
 ellbins = arange(2,lmax+2,deltal)
@@ -27,7 +28,7 @@ mask[abs(90-rad2deg(t)) < 10] = False
 npix = sum(mask)
 
 fwhm = 0.5
-bl=gauss_beam(deg2rad(fwhm), lmax=Slmax+1)
+bl=hp.gauss_beam(deg2rad(fwhm), lmax=Slmax+1)
 
 allStoke, der, ind = xqml.getstokes(polar=True,temp=False,EBTB=False)
 nder=len(der)
@@ -64,8 +65,9 @@ V = esti.get_covariance()
 allcl = []
 esti = xqml.xQML(mask,ellbins, clth, Pl=Pl, fwhm=fwhm)
 esti.construct_esti( NoiseVar, NoiseVar)
-for n in range(100):
-	progress_bar( n, 100)
+start = timeit.default_timer()
+for n in np.arange(100):
+	xqml.progress_bar( n, 100,timeit.default_timer()-start)
 	cmb = hp.synfast( clth, nside, fwhm=deg2rad(fwhm), pixwin=True, new=True, verbose=False)
 	dm = cmb[1:,mask] + (randn(2*npix)*sqrt(varmap)).reshape( 2, npix)
 	allcl.append(esti.get_spectra( dm, dm))
@@ -102,14 +104,15 @@ V = xqml.CovAB(invW, G)
 ###################################### Construct MC ######################################
 
 allcl = []
-for n in range(100):
-	progress_bar( n, 100)
+start = timeit.default_timer()
+for n in np.arange(100):
+	xqml.progress_bar( n, 100, timeit.default_timer()-start)
 	cmb = hp.synfast( clth, nside, fwhm=deg2rad(fwhm), pixwin=True, new=True, verbose=False)
 	dm = cmb[1:,mask] + (randn(2*npix)*sqrt(varmap)).reshape( 2, npix)
 	yl = xqml.yQuadEstimator(dm.ravel(), dm.ravel(), El)
 	allcl.append( xqml.ClQuadEstimator(invW, yl).reshape(nder,-1))
 
-fits.writeto( "allcl_Slmax%d.fits" % Slmax, array(allcl))
+fits.writeto( "allcl_Slmax%d.fits" % Slmax, array(allcl), overwrite=True)
 
 
 
@@ -130,4 +133,4 @@ semilogy()
 
 
 
-
+show()
