@@ -57,11 +57,14 @@ Pl = Pl.reshape((nder)*(np.shape(Pl)[1]), 2*npix, 2*npix)
 
 
 
+###################################### Compute spectra ######################################
 esti = xqml.xQML(mask,ellbins, clth, Pl=Pl, fwhm=fwhm)
 esti.construct_esti( NoiseVar, NoiseVar)
 cl = esti.get_spectra( dm, dm)
 V = esti.get_covariance()
 
+
+###################################### Construct MC ######################################
 allcl = []
 esti = xqml.xQML(mask,ellbins, clth, Pl=Pl, fwhm=fwhm)
 esti.construct_esti( NoiseVar, NoiseVar)
@@ -71,49 +74,6 @@ for n in np.arange(100):
 	cmb = hp.synfast( clth, nside, fwhm=deg2rad(fwhm), pixwin=True, new=True, verbose=False)
 	dm = cmb[1:,mask] + (randn(2*npix)*sqrt(varmap)).reshape( 2, npix)
 	allcl.append(esti.get_spectra( dm, dm))
-
-
-
-
-
-
-
-###################################### Construct El, Wb ######################################
-C = S + NoiseVar
-invC = inv(C)
-#invS = inv(S)
-
-El = xqml.El(invC, invC, Pl)
-Wb = xqml.CrossWindowFunction(El, Pl)
-invW = inv(Wb)
-
-
-###################################### Compute spectra ######################################
-
-yl = xqml.yQuadEstimator(dm.ravel(), dm.ravel(), El)
-cl = xqml.ClQuadEstimator(invW, yl).reshape(nder,-1)
-
-plot( clth.transpose()[:lmax+1,:])
-plot( ellval, cl.transpose())
-
-
-G = xqml.CrossGisherMatrix(El, S)
-V = xqml.CovAB(invW, G)
-
-
-###################################### Construct MC ######################################
-
-allcl = []
-start = timeit.default_timer()
-for n in np.arange(100):
-	xqml.progress_bar( n, 100, timeit.default_timer()-start)
-	cmb = hp.synfast( clth, nside, fwhm=deg2rad(fwhm), pixwin=True, new=True, verbose=False)
-	dm = cmb[1:,mask] + (randn(2*npix)*sqrt(varmap)).reshape( 2, npix)
-	yl = xqml.yQuadEstimator(dm.ravel(), dm.ravel(), El)
-	allcl.append( xqml.ClQuadEstimator(invW, yl).reshape(nder,-1))
-
-fits.writeto( "allcl_Slmax%d.fits" % Slmax, array(allcl), overwrite=True)
-
 
 
 figure()
