@@ -43,13 +43,14 @@ def polrotangle(ri, rj):
     norm = np.sqrt(np.dot(ris, np.transpose(ris)))
 
     # case where pixels is at the pole
-    if norm<=1e-15:
+    if norm <= 1e-15:
         cos2a = 1.0
         sin2a = 0.0
         return cos2a, sin2a
     ris = ris / norm
 
-    # Now, the angle we want is that between these two great circles: defined by
+    # Now, the angle we want is that
+    # between these two great circles: defined by
     cosa = np.dot(rij, np.transpose(ris))
 
     # the sign is more subtle : see tegmark et de oliveira costa 2000 eq. A6
