@@ -75,7 +75,7 @@ def El(invCAA, invCBB, Pl, Bll=None, expend=False):
     ???
     """
     # Tegmark B-matrix useless so far)
-    if Bll == None:
+    if Bll is None:
         Bll = np.diagflat((np.ones(len(Pl))))
 
     lmax = len(Pl) * 2**int(expend)
@@ -83,9 +83,13 @@ def El(invCAA, invCBB, Pl, Bll=None, expend=False):
     npix = len(invCAA)
     # triangular shape ds_dcb
     if expend:
-        El = np.array([np.dot(np.dot(invCAA, Expd(Pl,l)), invCBB) for l in lrange]).reshape((lmax,npix,npix))
+        El = np.array(
+            [np.dot(np.dot(invCAA, Expd(Pl, l)), invCBB) for l in lrange]
+            ).reshape((lmax, npix, npix))
     else:
-        El = np.array([np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]).reshape((lmax,npix,npix))
+        El = np.array(
+            [np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]
+            ).reshape((lmax, npix, npix))
     return El
 
 def ElLong(invCAA, invCBB, Pl, Bll=None, expend=False):
@@ -102,7 +106,7 @@ def ElLong(invCAA, invCBB, Pl, Bll=None, expend=False):
     ???
     """
     # Tegmark B-matrix useless so far)
-    if Bll == None:
+    if Bll is None:
         Bll = np.diagflat((np.ones(len(Pl))))
 
     lmax = len(Pl) * 2**int(expend)
@@ -111,14 +115,16 @@ def ElLong(invCAA, invCBB, Pl, Bll=None, expend=False):
     # triangular shape ds_dcb
     if expend:
         for l in lrange:
-            Pl[l] = np.dot(np.dot(invCAA, Expd(Pl, l)), invCBB).reshape((npix, npix ))
+            Pl[l] = np.dot(
+                np.dot(invCAA, Expd(Pl, l)), invCBB).reshape((npix, npix))
     else:
         for l in lrange:
-            Pl[l] = np.dot(np.dot(invCAA, Pl[l]), invCBB).reshape((npix, npix ))
+            Pl[l] = np.dot(np.dot(invCAA, Pl[l]), invCBB).reshape((npix, npix))
 
 def CrossFisherMatrix(El, Pl, expend=False):
     """
-    Compute cross (or auto) fisher matrix Fll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
+    Compute cross (or auto) fisher matrix
+    Fll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
 
     Parameters
     ----------
@@ -133,15 +139,20 @@ def CrossFisherMatrix(El, Pl, expend=False):
     lrange = np.arange(lmax)
     if expend:
         # pas de transpose car symm
-        FAB = np.array([np.sum(El[il] * Expd(Pl,jl)) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+        FAB = np.array(
+            [np.sum(El[il] * Expd(Pl, jl)) for il in lrange for jl in lrange]
+            ).reshape(lmax, lmax)
     else:
         # pas de transpose car symm
-        FAB = np.array([np.sum(El[il] * Pl[jl]) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+        FAB = np.array(
+            [np.sum(El[il] * Pl[jl]) for il in lrange for jl in lrange]
+            ).reshape(lmax, lmax)
     return FAB
 
 def CrossWindowFunction(El, Pl):
     """
-    Compute Tegmark cross (or auto) window matrix Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
+    Compute Tegmark cross (or auto) window matrix
+    Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
     Equivalent to Fisher matrix Fll when Tegmark B-matrix = 1
 
     Parameters
@@ -156,12 +167,15 @@ def CrossWindowFunction(El, Pl):
     lmax = len(El)
     lrange = np.arange((lmax))
     # pas de transpose car symm
-    Wll = np.array([np.sum(El[il] * Pl[jl]) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+    Wll = np.array(
+        [np.sum(El[il] * Pl[jl]) for il in lrange for jl in lrange]
+        ).reshape(lmax, lmax)
     return Wll
 
 def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     """
-    Compute Tegmark cross (or auto) window matrix Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
+    Compute Tegmark cross (or auto) window matrix
+    Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
     Equivalent to Fisher matrix Fll when Tegmark B-matrix = 1
 
     Parameters
@@ -176,7 +190,9 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     lmax = len(Pl)
     lrange = np.arange((lmax))
     # Pas de transpose car symm
-    Wll = np.array([np.sum(np.dot(np.dot(invCAA, Pl[il]), invCBB) * Pl[jl]) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+    Wll = np.array(
+        [np.sum(np.dot(np.dot(invCAA, Pl[il]), invCBB) * Pl[jl])
+         for il in lrange for jl in lrange]).reshape(lmax, lmax)
     return Wll
 
 def CrossMisherMatrix(El, CAA, CBB):
@@ -194,9 +210,11 @@ def CrossMisherMatrix(El, CAA, CBB):
     """
     lmax = len(El)
     lrange = np.arange(lmax)
-    El_CAA = np.array([np.dot(CAA,El[il]) for il in lrange])
-    El_CBB = np.array([np.dot(CBB,El[il]) for il in lrange])
-    MAB = np.array([np.sum(El_CAA[il] * El_CBB[jl].T) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+    El_CAA = np.array([np.dot(CAA, El[il]) for il in lrange])
+    El_CBB = np.array([np.dot(CBB, El[il]) for il in lrange])
+    MAB = np.array(
+        [np.sum(El_CAA[il] * El_CBB[jl].T) for il in lrange for jl in lrange]
+        ).reshape(lmax, lmax)
     return MAB
 
 def CrossGisherMatrix(El, CAB):
@@ -214,8 +232,10 @@ def CrossGisherMatrix(El, CAB):
     """
     lmax = len(El)
     lrange = np.arange(lmax)
-    El_CAB = np.array([np.dot(CAB,El[il]) for il in lrange])
-    GAB = np.array([np.sum(El_CAB[il] * El_CAB[jl].T) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+    El_CAB = np.array([np.dot(CAB, El[il]) for il in lrange])
+    GAB = np.array(
+        [np.sum(El_CAB[il] * El_CAB[jl].T) for il in lrange for jl in lrange]
+        ).reshape(lmax, lmax)
     return GAB
 
 def CrossGisherMatrixLong(El, CAB):
@@ -233,7 +253,9 @@ def CrossGisherMatrixLong(El, CAB):
     """
     lmax = len(El)
     lrange = np.arange(lmax)
-    GAB = np.array([np.sum(np.dot(CAB, El[il]) * np.dot(CAB,El[jl]).T) for il in lrange for jl in lrange]).reshape(lmax, lmax)
+    GAB = np.array(
+        [np.sum(np.dot(CAB, El[il]) * np.dot(CAB, El[jl]).T)
+         for il in lrange for jl in lrange]).reshape(lmax, lmax)
     return GAB
 
 def yQuadEstimator(dA, dB, El):
