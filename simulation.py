@@ -108,6 +108,8 @@ def getstokes(polar=True, temp=False, EBTB=False):
     (['Q', 'U'], ['EE', 'BB'], [1, 2])
     >>> getstokes(polar=True, temp=True, EBTB=False)
     (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
+    >>> getstokes(polar=True, temp=True, EBTB=True)
+    (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'EB', 'TB'], [0, 1, 2, 3, 4, 5])
     """
     allStoke = ['I', 'Q', 'U']
     if EBTB:
@@ -148,6 +150,48 @@ def GetBinningMatrix(
     ----------
     ??? : ???
         ???
+
+    Example
+    ----------
+    >>> bins = np.array([2.0, 5.0, 10.0])
+    >>> P, Q, ell, ellval = GetBinningMatrix(
+    ...     bins, 10.0)
+    >>> print(P) # doctest: +NORMALIZE_WHITESPACE
+    [[ 0.33333333  0.33333333  0.33333333  0.          0.          0.       0.
+       0.          0.          0.          0.          0.          0.       0.
+       0.          0.          0.          0.        ]
+     [ 0.          0.          0.          0.2         0.2         0.2      0.2
+       0.2         0.          0.          0.          0.          0.       0.
+       0.          0.          0.          0.        ]
+     [ 0.          0.          0.          0.          0.          0.       0.
+       0.          0.          0.33333333  0.33333333  0.33333333  0.       0.
+       0.          0.          0.          0.        ]
+     [ 0.          0.          0.          0.          0.          0.       0.
+       0.          0.          0.          0.          0.          0.2      0.2
+       0.2         0.2         0.2         0.        ]]
+    >>> print(Q) # doctest: +NORMALIZE_WHITESPACE
+    [[ 1.  0.  0.  0.]
+     [ 1.  0.  0.  0.]
+     [ 1.  0.  0.  0.]
+     [ 0.  1.  0.  0.]
+     [ 0.  1.  0.  0.]
+     [ 0.  1.  0.  0.]
+     [ 0.  1.  0.  0.]
+     [ 0.  1.  0.  0.]
+     [ 0.  0.  0.  0.]
+     [ 0.  0.  1.  0.]
+     [ 0.  0.  1.  0.]
+     [ 0.  0.  1.  0.]
+     [ 0.  0.  0.  1.]
+     [ 0.  0.  0.  1.]
+     [ 0.  0.  0.  1.]
+     [ 0.  0.  0.  1.]
+     [ 0.  0.  0.  1.]
+     [ 0.  0.  0.  0.]]
+    >>> print(ell)
+    [  2.   3.   4.   5.   6.   7.   8.   9.  10.  11.]
+    >>> print(ellval)
+    [ 3.  7.]
     """
     #### define Stokes
     allStoke, der, ind = getstokes(polar, temp, EBTB)
@@ -225,6 +269,14 @@ def IsInvertible(F):
 
 
 if __name__ == "__main__":
+    """
+    Run the doctest using
+
+    python simulation.py
+
+    If the tests are OK, the script should exit gracefuly, otherwise the
+    failure(s) will be printed out.
+    """
     import doctest
     if np.__version__ >= "1.14.0":
         np.set_printoptions(legacy="1.13")
