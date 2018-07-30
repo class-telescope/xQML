@@ -80,7 +80,8 @@ class xQML(object):
         # For example that would be good to assert that the user
         # set at least polar or temp to True.
         self.stokes, self.istokes = self._getstokes(polar=polar, temp=temp)
-        self.spec, self.ispec = self._getspec(polar=polar, temp=temp, EBTB=EBTB)
+        self.spec, self.ispec = self._getspec(
+            polar=polar, temp=temp, EBTB=EBTB)
         self.nstokes = len(self.stokes)
         self.nspec = len(self.spec)
 
@@ -120,7 +121,7 @@ class xQML(object):
         self.invCb = linalg.inv(self.S + NB)
 
         # Compute E using Eq...
-        self.E = El( self.invCa, self.invCb, self.Pl)
+        self.E = El(self.invCa, self.invCb, self.Pl)
 
         # Finally compute invW by inverting...
         self.invW = linalg.inv(CrossWindowFunction(self.E, self.Pl))
@@ -141,8 +142,8 @@ class xQML(object):
         cond_size1 = np.size(map1) == self.nstokes * self.npix
         cond_size2 = np.size(map2) == self.nstokes * self.npix
 
-        d1 = map1 if cond_size1 else map1[self.istokes,self.mask]
-        d2 = map2 if cond_size2 else map2[self.istokes,self.mask]
+        d1 = map1 if cond_size1 else map1[self.istokes, self.mask]
+        d2 = map2 if cond_size2 else map2[self.istokes, self.mask]
 
         # yl is...
         yl = yQuadEstimator(d1.ravel(), d2.ravel(), self.E)
@@ -151,7 +152,7 @@ class xQML(object):
         cl = ClQuadEstimator(self.invW, yl)
 
         # Return the reshaped set of cls
-        return cl.reshape(self.nspec,-1)
+        return cl.reshape(self.nspec, -1)
 
     def get_covariance(self):
         """
@@ -164,7 +165,7 @@ class xQML(object):
 
         """
         ## Do...
-        G = CrossGisherMatrix( self.E, self.S)
+        G = CrossGisherMatrix(self.E, self.S)
 
         ## Compute V using....
         V = CovAB(self.invW, G)
@@ -190,13 +191,13 @@ class xQML(object):
             List containing position of I, Q and U in the
             stokes list (if present).
         """
-        stokes=[]
+        stokes = []
         if temp:
-            stokes.append( 'I')
+            stokes.append('I')
         if polar:
-            stokes.extend( ['Q','U'])
+            stokes.extend(['Q', 'U'])
 
-        indices = [['I','Q','U'].index(s) for s in stokes]
+        indices = [['I', 'Q', 'U'].index(s) for s in stokes]
 
         return stokes, indices
 
@@ -215,21 +216,21 @@ class xQML(object):
             Append cross-spectra (according to the value of polar and temp)
             to the list of spectra. Default is False.
         """
-        allspec = ['TT','EE','BB','TE','EB','TB']
+        allspec = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
         der = []
         if temp:
-            der.append( 'TT')
+            der.append('TT')
 
         if polar:
-            der.extend( ['EE','BB'])
+            der.extend(['EE', 'BB'])
             if temp:
-                der.append( 'TE')
+                der.append('TE')
 
             if EBTB:
                 if temp:
-                    der.extend(['TE','EB','TB'])
+                    der.extend(['TE', 'EB', 'TB'])
                 else:
-                    der.append( 'EB')
+                    der.append('EB')
 
         return der, [allspec.index(c) for c in der]
 
@@ -248,7 +249,7 @@ class xQML(object):
         """
         # Choose only needed spectra according to ispec, and truncate
         # the ell range according the bin range. Flatten (1D) the result.
-        model = clth[self.ispec][:,2:int(self.ellbins[-1])].flatten()
+        model = clth[self.ispec][:, 2:int(self.ellbins[-1])].flatten()
 
         ## Return scalar product btw Pl and the fiducial spectra.
-        return np.sum(self.Pl*model[:,None, None], 0)
+        return np.sum(self.Pl * model[:, None, None], 0)
