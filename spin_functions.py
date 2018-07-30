@@ -36,12 +36,12 @@ def dlss(z, s1, s2, lmax):
         print("error spins, s1<|s2|")
         return
 
-    # sign = -1 if (s1 + s2) and 1 else 1
+    # Conv: sign = -1 if (s1 + s2) and 1 else 1
     sign = (-1)**(s1 - s2)
     fs1 = math.factorial(2.0 * s1)
     fs1ps2 = math.factorial(1.0 * s1 + s2)
     fs1ms2 = math.factorial(1.0 * s1 - s2)
-    num = (1.0 + z)**(0.5 * (s1 + s2)) *  (1.0 - z)**(0.5 * (s1 - s2))
+    num = (1.0 + z)**(0.5 * (s1 + s2)) * (1.0 - z)**(0.5 * (s1 - s2))
 
     # Initialise the recursion (l = s1 + 1)
     d[s1] = sign / 2.0**s1 * np.sqrt(fs1 / fs1ps2 / fs1ms2) * num
@@ -51,7 +51,7 @@ def dlss(z, s1, s2, lmax):
     d[s1+1] = (2 * s1 + 1.0)*(z - s2 / (s1 + 1.0)) * d[s1] / rhoSSL1
 
     # Build the recursion for l > s1 + 1
-    for l in np.arange(s1 + 1, lmax, 1) :
+    for l in np.arange(s1 + 1, lmax, 1):
         l1 = l + 1.0
         numSSL = (l * l * 1.0 - s1 * s1) * (l * l * 1.0 - s2 * s2)
         rhoSSL = np.sqrt(numSSL) / (l * 1.0)
