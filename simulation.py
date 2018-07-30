@@ -24,14 +24,21 @@ def muKarcmin2var(muKarcmin, nside):
     ----------
     ??? : ???
         ???
+
+
+    Example
+    ----------
+    >>> var = muKarcmin2var(10.0, 16)
+    >>> print(round(var * 1e16))
+    21.0
     """
-    pixarea = hp.nside2pixarea(nside, degrees = True)
-    varperpix = (muKarcmin*1e-6/60.)**2/pixarea
+    pixarea = hp.nside2pixarea(nside, degrees=True)
+    varperpix = (muKarcmin * 1e-6 / 60.)**2 / pixarea
     return varperpix
 
 def pixvar2nl(pixvar, nside):
     """
-    Return noise spectrum level for a given nside and  pixel variance
+    Return noise spectrum level for a given nside and pixel variance
 
     Parameters
     ----------
@@ -43,6 +50,14 @@ def pixvar2nl(pixvar, nside):
     ----------
     ??? : ???
         ???
+
+    Example
+    ----------
+    >>> nside = 16
+    >>> pixvar = muKarcmin2var(10.0, nside)
+    >>> nl = pixvar2nl(pixvar, nside)
+    >>> print(round(nl * 1e18))
+    8.0
     """
     return pixvar*4.*np.pi/(12*nside**2.)
 
@@ -60,6 +75,14 @@ def getNl(pixvar, nside, nbins):
     ----------
     ??? : ???
         ???
+
+    Example
+    ----------
+    >>> nside = 16
+    >>> pixvar = muKarcmin2var(10.0, nside)
+    >>> nl = getNl(pixvar, nside, 2)
+    >>> print(round(nl[0] * 1e18))
+    8.0
     """
     return pixvar*4.*np.pi/(12*nside**2.)*np.ones((nbins))
 
@@ -78,6 +101,13 @@ def getstokes(polar=True, temp=False, EBTB=False):
     ----------
     ??? : ???
         ???
+
+    Example
+    ----------
+    >>> getstokes(polar=True, temp=False, EBTB=False)
+    (['Q', 'U'], ['EE', 'BB'], [1, 2])
+    >>> getstokes(polar=True, temp=True, EBTB=False)
+    (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
     """
     allStoke = ['I', 'Q', 'U']
     if EBTB:
@@ -192,3 +222,10 @@ def IsInvertible(F):
     eps = np.finfo(F.dtype).eps
     print("Cond Numb = ", np.linalg.cond(F), "Matrix eps=", eps)
     return np.linalg.cond(F) > np.finfo(F.dtype).eps
+
+
+if __name__ == "__main__":
+    import doctest
+    if np.__version__ >= "1.14.0":
+        np.set_printoptions(legacy="1.13")
+    doctest.testmod()
