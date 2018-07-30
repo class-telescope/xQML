@@ -44,8 +44,8 @@ def compute_ds_dcb(
     if Slmax < ellbins[-1]:
         print("WARNING : Slmax < lmax")
 
-    # Slmax+=1 # for max binning value
-    allStoke,der,ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
+    # for max binning value Slmax+=1
+    allStoke, der, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
     print('Stokes parameters :', allStoke)
     print('Derivatives w.r.t. :', der)
 
@@ -72,19 +72,19 @@ def compute_ds_dcb(
         else:
             Smatrix = S_bins_fast(
                 ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-                polar=polar,temp=temp, EBTB=EBTB,
+                polar=polar, temp=temp, EBTB=EBTB,
                 pixwining=pixwining, timing=timing)
         return Smatrix
 
     if MC:
         dcov, Smatrix = covth_bins_MC(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-            polar=polar,temp=temp, EBTB=EBTB,
+            polar=polar, temp=temp, EBTB=EBTB,
             pixwining=pixwining, timing=timing)
     else:
         dcov, Smatrix = covth_bins_fast(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-            polar=polar,temp=temp, EBTB=EBTB,
+            polar=polar, temp=temp, EBTB=EBTB,
             pixwining=pixwining, timing=timing)
 
     stop = timeit.default_timer()
@@ -178,10 +178,10 @@ def covth_bins_MC(
             print("not implemented")
             # break;
             for l in np.arange(2 * nbins, 3 * nbins):
-                ClthOne[l, 1]= masks[l % nbins] * norm
-                ClthOne[l, 2]= masks[l % nbins] * norm
-                #-nbins*(l/nbins)]*norm # couille ici
-                ClthOne[l, 4]= masks[l % nbins] * norm
+                ClthOne[l, 1] = masks[l % nbins] * norm
+                ClthOne[l, 2] = masks[l % nbins] * norm
+                # couille ici: -nbins*(l/nbins)]*norm
+                ClthOne[l, 4] = masks[l % nbins] * norm
 
         dcov = np.zeros((nder * (nbins), 2 * npix, 2 * npix))
         start = timeit.default_timer()
@@ -208,7 +208,7 @@ def covth_bins_MC(
                         lmax=Slmax,
                         new=True,
                         verbose=False)
-                    )[1:3,ipok].flatten() for s in np.arange(nsimu)]).reshape(
+                    )[1:3, ipok].flatten() for s in np.arange(nsimu)]).reshape(
                         nsimu, 2*npix), rowvar=False)
 
     else:
@@ -238,7 +238,7 @@ def covth_bins_MC(
                         lmax=Slmax,
                         new=True,
                         verbose=False)
-                    )[0,ipok].flatten() for s in np.arange(nsimu)]).reshape(
+                    )[0, ipok].flatten() for s in np.arange(nsimu)]).reshape(
                         nsimu, npix), rowvar=False)
 
     stop = timeit.default_timer()
@@ -262,9 +262,8 @@ def S_bins_MC(
     ----------
     ???
     """
-    if nsimu==1:
-        #10000
-        nsimu=(12 * nside**2) * 10 * (int(polar) + 1)
+    if nsimu == 1:
+        nsimu = (12 * nside**2) * 10 * (int(polar) + 1)
     print("nsimu=", nsimu)
     lmax = ellbins[-1]
     ell = np.arange(np.min(ellbins), np.max(ellbins) + 1)
@@ -272,10 +271,10 @@ def S_bins_MC(
     maskl = ell < (lmax + 1)
     ell = ell[maskl]
     nbins = len(ellbins) - 1
-     # define min
+    # define min
     minell = np.array(ellbins[0: nbins])
     # and max of a bin
-    maxell = np.array(ellbins[1: nbins + 1]) -1
+    maxell = np.array(ellbins[1: nbins + 1]) - 1
     ellval = (minell + maxell) * 0.5
 
     print('minell:', minell)
@@ -302,7 +301,7 @@ def S_bins_MC(
         sqrtpix = np.sqrt(prepixwin[1, 2:])
         poly = np.polyfit(rng, logpix, deg=3, w=sqrtpix)
         # -1 avant Slmax+=1
-        y_int  = np.polyval(poly, np.arange(Slmax))
+        y_int = np.polyval(poly, np.arange(Slmax))
         fpixwin = np.append([0, 0], np.exp(y_int))
         # fpixwin = np.array(hp.pixwin(nside, pol=True))[int(polar)][2:]
     else:
@@ -312,7 +311,7 @@ def S_bins_MC(
     print("shape fpixwin", np.shape(fpixwin))
     # +1 avant Slmax+=1
     print("shape bl", np.shape(bl[: Slmax + 2]))
-    masks=[]
+    masks = []
     for i in np.arange(nbins):
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
     masks = np.array(masks)
@@ -327,29 +326,48 @@ def S_bins_MC(
     if polar:
         # stok = [1,2,4] if EBTB else [1,2]
         # npix=2*npix
-        ClthOne = np.zeros((nder*(nbins), 6,(Slmax+2))) # avant Slmax+=1
-        for l in np.arange(2*nbins):
-            ClthOne[l,l/nbins+1]= masks[l % nbins]*norm
+        # avant Slmax+=1
+        ClthOne = np.zeros((nder * (nbins), 6, (Slmax + 2)))
+        for l in np.arange(2 * nbins):
+            ClthOne[l, l / nbins + 1] = masks[l % nbins] * norm
         if EBTB:
             print("not implemented")
             # break;
             for l in np.arange(2*nbins, 3*nbins):
-                ClthOne[l,1]= masks[l % nbins]*norm
-                ClthOne[l,2]= masks[l % nbins]*norm
-                #-nbins*(l/nbins)]*norm # couille ici
-                ClthOne[l,4]= masks[l % nbins]*norm
+                ClthOne[l, 1] = masks[l % nbins]*norm
+                ClthOne[l, 2] = masks[l % nbins]*norm
+                # couille ici : -nbins*(l/nbins)]*norm
+                ClthOne[l, 4] = masks[l % nbins]*norm
 
-        S = np.cov(np.array([np.array(hp.synfast(clth[:,:Slmax+2]*norm, nside, lmax=Slmax, new=True,verbose=False))[1:3,ipok].flatten() for s in np.arange(nsimu)]).reshape(nsimu, 2*npix), rowvar=False)
+        S = np.cov(
+            np.array(
+                [np.array(hp.synfast(
+                    clth[:, : Slmax + 2]*norm,
+                    nside,
+                    lmax=Slmax,
+                    new=True,
+                    verbose=False))[1:3, ipok].flatten()
+                 for s in np.arange(nsimu)]).reshape(nsimu, 2 * npix),
+            rowvar=False)
 
     else:
         ClthOne = np.zeros((nbins, (Slmax+2)))
         for l in np.arange((nbins)):
-            ClthOne[l]= masks[l]*norm
-        S = np.cov(np.array([np.array(hp.synfast(clth[:, :Slmax+2]*norm, nside, lmax=Slmax, new=True,verbose=False))[0,ipok].flatten() for s in np.arange(nsimu)]).reshape(nsimu, npix), rowvar=False)
+            ClthOne[l] = masks[l]*norm
+        S = np.cov(
+            np.array(
+                [np.array(hp.synfast(
+                    clth[:, : Slmax + 2] * norm,
+                    nside,
+                    lmax=Slmax,
+                    new=True,
+                    verbose=False))[0, ipok].flatten()
+                 for s in np.arange(nsimu)]).reshape(nsimu, npix),
+            rowvar=False)
 
     stop = timeit.default_timer()
 
-    print("time [sec] = ", round(stop - start, 2)  )
+    print("time [sec] = ", round(stop - start, 2))
 
     return S
 
@@ -383,46 +401,56 @@ def covth_bins_fast(
     maskl = ell < (lmax + 1)
     ell = ell[maskl]
     nbins = len(ellbins) - 1
-    minell = np.array(ellbins[0:nbins]) # define min
-    maxell = np.array(ellbins[1:nbins+1])-1 # and max of a bin
+    minell = np.array(ellbins[0:nbins])
+    maxell = np.array(ellbins[1:nbins+1]) - 1
     ellval = (minell + maxell) * 0.5
 
-    print('minell:',minell)
-    print('maxell:',maxell)
+    print('minell:', minell)
+    print('maxell:', maxell)
 
     #### define Stokes
-    allStoke,der,ind = getstokes(polar=polar,temp=temp,EBTB=EBTB)
-    nder=len(der)
+    allStoke, der, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
+    nder = len(der)
 
     #### define pixels
-    rpix=np.array(hp.pix2vec(nside,ipok))
+    rpix = np.array(hp.pix2vec(nside, ipok))
 
-    maskl=ell<(lmax+1) # assure que ell.max < lmax
-    masklRQ = (np.arange(lmax+1)>=min(ell)) & (np.arange(lmax+1)<(lmax+1))
+    # assure que ell.max < lmax
+    maskl = ell < (lmax + 1)
+    masklRQ = (np.arange(lmax+1) >= min(ell)) & (np.arange(lmax+1) < (lmax+1))
 
-    #### define Pixel window function
+    # define Pixel window function
     ll = np.arange(Slmax+2)
 
     if pixwining:
-        prepixwin=np.array(hp.pixwin(nside, pol=True))
-        poly = np.polyfit(np.arange(len(prepixwin[int(polar),2:])), np.log(prepixwin[int(polar),2:]), deg=3, w=np.sqrt(prepixwin[int(polar),2:]))
-        y_int  = np.polyval(poly, np.arange(Slmax))
+        prepixwin = np.array(hp.pixwin(nside, pol=True))
+        poly = np.polyfit(
+            np.arange(
+                len(prepixwin[int(polar), 2:])),
+                np.log(prepixwin[int(polar), 2:]),
+                deg=3,
+                w=np.sqrt(prepixwin[int(polar), 2:]))
+        y_int = np.polyval(poly, np.arange(Slmax))
         fpixwin = np.exp(y_int)
-        fpixwin = np.append(prepixwin[int(polar)][2:],fpixwin[len(prepixwin[0])-2:])[:Slmax]
+        fpixwin = np.append(
+            prepixwin[int(polar)][2:],
+            fpixwin[len(prepixwin[0]) - 2:])[: Slmax]
     else:
-        fpixwin=ll[2:]*0+1
+        fpixwin = ll[2:] * 0 + 1
 
     print("shape fpixwin", np.shape(fpixwin))
     print("shape bl", np.shape(bl[:Slmax+2]))
-    # print("long pixwin", fpixwin, "short", np.array(hp.pixwin(nside, pol=True))[int(polar)])
-    norm=(2*ll[2:]+1)/(4.*np.pi)*(fpixwin**2)*(bl[2:Slmax+2]**2)
+    # print(
+    #     "long pixwin", fpixwin, "short",
+    #     np.array(hp.pixwin(nside, pol=True))[int(polar)])
+    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin**2)*(bl[2:Slmax+2]**2)
     print("norm ", np.shape(norm))
     print("ell ", np.shape(ell))
 
     #### define masks for ell bins
-    masks=[]
+    masks = []
     for i in np.arange(nbins):
-        masks.append((ll[2:]>=minell[i]) & (ll[2:]<=maxell[i]))
+        masks.append((ll[2:] >= minell[i]) & (ll[2:] <= maxell[i]))
     masks = np.array(masks)
     print('Bins mask shape :', np.shape(masks))
     print("norm", norm)
@@ -431,18 +459,20 @@ def covth_bins_fast(
     print(masks*1)
 
     ### Create array for covariances matrices per bin
-    nbpixok=ipok.size
-    nstokes=np.size(allStoke)
+    nbpixok = ipok.size
+    nstokes = np.size(allStoke)
     print('creating array')
-    newcov=np.zeros((nder,nbins,nstokes*nbpixok,nstokes*nbpixok)) # final ds_dcb
-    Smatrix = np.zeros((nstokes*nbpixok,nstokes*nbpixok)) # Signal matrix S
+    # final ds_dcb
+    newcov = np.zeros((nder, nbins, nstokes*nbpixok, nstokes*nbpixok))
+    # Signal matrix S
+    Smatrix = np.zeros((nstokes*nbpixok, nstokes*nbpixok))
 
     start = timeit.default_timer()
     for i in np.arange(nbpixok):
         if timing:
             progress_bar(i, nbpixok, -0.5 * (start-timeit.default_timer()))
         for j in np.arange(i, nbpixok):
-            if nstokes==1:
+            if nstokes == 1:
                 pl = pl0(allcosang[i, j], Slmax + 1)[2:]
                 elem = np.sum((norm * pl * clth[0, 2: Slmax + 2])[:-1])
                 Smatrix[i, j] = elem
@@ -458,96 +488,168 @@ def covth_bins_fast(
                 cos_chi = allcosang[i, j]
 
                 # Tegmark version
-                #[masklRQ]
+                # [masklRQ]
                 Q22 = F1l2(cos_chi, Slmax + 1)[2:]
-                #[masklRQ] # /!\ signe - !
+                # [masklRQ] # /!\ signe - !
                 R22 = -F2l2(cos_chi, Slmax+1)[2:]
 
                 # Matt version
                 # d20  = dlss(cos_chi, 2,  0, Slmax+1)
-                #d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
-                #d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
+                # d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
+                # d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
                 # P02 = -d20
-                #Q22 = ( d2p2 + d2m2 )[2:]/2.
-                #R22 = ( d2p2 - d2m2 )[2:]/2.
+                # Q22 = ( d2p2 + d2m2 )[2:]/2.
+                # R22 = ( d2p2 - d2m2 )[2:]/2.
 
-                elem1  = np.sum( (norm * ( cij*cji*Q22 + sij*sji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on QQ [masklRQ]
-                elem2  = np.sum( (norm * (-cij*sji*Q22 + sij*cji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on QU [masklRQ]
-                elem3  = np.sum( (norm * ( sij*sji*Q22 + cij*cji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on UU [masklRQ]
-                elem4  = np.sum( (norm * (-sij*cji*Q22 + cij*sji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on QU [masklRQ]
+                # EE on QQ [masklRQ]
+                elem1 = np.sum((norm * (
+                    cij*cji*Q22 + sij*sji*R22)*(clth[1, 2: Slmax+2]))[: -1])
+                # EE on QU [masklRQ]
+                elem2 = np.sum((norm * (
+                    -cij*sji*Q22 + sij*cji*R22)*(clth[1, 2: Slmax+2]))[: -1])
+                # EE on UU [masklRQ]
+                elem3 = np.sum((norm * (
+                    sij*sji*Q22 + cij*cji*R22)*(clth[1, 2: Slmax+2]))[: -1])
+                # EE on QU [masklRQ]
+                elem4 = np.sum((norm * (
+                    -sij*cji*Q22 + cij*sji*R22)*(clth[1, 2: Slmax+2]))[: -1])
 
-                elem3 += np.sum( (norm * ( cij*cji*Q22 + sij*sji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on QQ [masklRQ]
-                elem4 -= np.sum( (norm * (-cij*sji*Q22 + sij*cji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on QU [masklRQ]
-                elem1 += np.sum( (norm * ( sij*sji*Q22 + cij*cji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on UU [masklRQ]
-                elem2 -= np.sum( (norm * (-sij*cji*Q22 + cij*sji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on UQ [masklRQ]
+                # BB on QQ [masklRQ]
+                elem3 += np.sum((norm * (
+                    cij*cji*Q22 + sij*sji*R22)*(clth[2, 2: Slmax+2]))[: -1])
+                # BB on QU [masklRQ]
+                elem4 -= np.sum((norm * (
+                    -cij*sji*Q22 + sij*cji*R22)*(clth[2, 2: Slmax+2]))[: -1])
+                # BB on UU [masklRQ]
+                elem1 += np.sum((norm * (
+                    sij*sji*Q22 + cij*cji*R22)*(clth[2, 2: Slmax+2]))[: -1])
+                # BB on UQ [masklRQ]
+                elem2 -= np.sum((norm * (
+                    -sij*cji*Q22 + cij*sji*R22)*(clth[2, 2: Slmax+2]))[: -1])
 
                 if EBTB:
-                    elem = np.sum( (norm * ( Q22 - R22)*(clth[4,2:Slmax+2]) )[:-1] )  #EB on all
-                    elem1 += ( cji*sij + sji*cij)*elem # EB on QQ
-                    elem2 += (-sji*sij + cji*cij)*elem # EB on QU
-                    elem3 += (-sji*cij - cji*sij)*elem # EB on UU
-                    elem4 += ( cji*cij - sji*sij)*elem # EB on QU
+                    # EB on all
+                    elem = np.sum(
+                        (norm * (Q22 - R22)*(clth[4, 2: Slmax+2]))[: -1])
+                    # EB on QQ
+                    elem1 += (cji*sij + sji*cij)*elem
+                    # EB on QU
+                    elem2 += (-sji*sij + cji*cij)*elem
+                    # EB on UU
+                    elem3 += (-sji*cij - cji*sij)*elem
+                    # EB on QU
+                    elem4 += (cji*cij - sji*sij)*elem
 
-                Smatrix[0*nbpixok+i,0*nbpixok+j] =  elem1 # to 3
-                Smatrix[0*nbpixok+i,1*nbpixok+j] =  elem2 # to -4
-                Smatrix[1*nbpixok+i,1*nbpixok+j] =  elem3 # to 1
-                Smatrix[1*nbpixok+i,0*nbpixok+j] =  elem4 # to -2
+                # to 3
+                Smatrix[0*nbpixok+i, 0*nbpixok+j] = elem1
+                # to -4
+                Smatrix[0*nbpixok+i, 1*nbpixok+j] = elem2
+                # to 1
+                Smatrix[1*nbpixok+i, 1*nbpixok+j] = elem3
+                # to -2
+                Smatrix[1*nbpixok+i, 0*nbpixok+j] = elem4
 
-                Smatrix[0*nbpixok+j,0*nbpixok+i] =  elem1 # to 3
-                Smatrix[1*nbpixok+j,0*nbpixok+i] =  elem2 # to -4
-                Smatrix[1*nbpixok+j,1*nbpixok+i] =  elem3 # to 1
-                Smatrix[0*nbpixok+j,1*nbpixok+i] =  elem4 # to -2
+                # to 3
+                Smatrix[0*nbpixok+j, 0*nbpixok+i] = elem1
+                # to -4
+                Smatrix[1*nbpixok+j, 0*nbpixok+i] = elem2
+                # to 1
+                Smatrix[1*nbpixok+j, 1*nbpixok+i] = elem3
+                # to -2
+                Smatrix[0*nbpixok+j, 1*nbpixok+i] = elem4
 
                 for b in np.arange(nbins):
-                    elem1 = np.sum(( norm*( cij*cji*Q22 + sij*sji*R22) )[masks[b]] )  #EE or BB on QQ
-                    elem2 = np.sum(( norm*(-cij*sji*Q22 + sij*cji*R22) )[masks[b]] )  #EE or BB on QU
-                    elem3 = np.sum(( norm*( sij*sji*Q22 + cij*cji*R22) )[masks[b]] )  #EE or BB on UU
-                    elem4 = np.sum(( norm*(-sij*cji*Q22 + cij*sji*R22) )[masks[b]] )  #EE or BB on UQ
+                    # EE or BB on QQ
+                    elem1 = np.sum((norm*(cij*cji*Q22+sij*sji*R22))[masks[b]])
+                    # EE or BB on QU
+                    elem2 = np.sum((norm*(-cij*sji*Q22+sij*cji*R22))[masks[b]])
+                    # EE or BB on UU
+                    elem3 = np.sum((norm*(sij*sji*Q22+cij*cji*R22))[masks[b]])
+                    # EE or BB on UQ
+                    elem4 = np.sum((norm*(-sij*cji*Q22+cij*sji*R22))[masks[b]])
 
                     # # EE ij then ji
-                    newcov[0,b,i,j]                 =  elem1 # to 3 for BB
-                    newcov[0,b,i,nbpixok+j]         =  elem2 # to -4
-                    newcov[0,b,nbpixok+i,nbpixok+j] =  elem3 # to 1
-                    newcov[0,b,nbpixok+i,j]         =  elem4 # to -2
+                    # to 3 for BB
+                    newcov[0, b, i, j] = elem1
+                    # to -4
+                    newcov[0, b, i, nbpixok+j] = elem2
+                    # to 1
+                    newcov[0, b, nbpixok+i, nbpixok+j] = elem3
+                    # to -2
+                    newcov[0, b, nbpixok+i, j] = elem4
 
-                    newcov[0,b,j,i]                 =  elem1 # to 3
-                    newcov[0,b,nbpixok+j,i]         =  elem2 # to -4
-                    newcov[0,b,nbpixok+j,nbpixok+i] =  elem3 # to 1
-                    newcov[0,b,j,nbpixok+i]         =  elem4 # to -2
+                    # to 3
+                    newcov[0, b, j, i] = elem1
+                    # to -4
+                    newcov[0, b, nbpixok+j, i] = elem2
+                    # to 1
+                    newcov[0, b, nbpixok+j, nbpixok+i] = elem3
+                    # to -2
+                    newcov[0, b, j, nbpixok+i] = elem4
 
                     # # BB ij then ji
-                    newcov[1,b,nbpixok+i,nbpixok+j] =  elem1
-                    newcov[1,b,nbpixok+i,j]         = -elem2
-                    newcov[1,b,i,j]                 =  elem3
-                    newcov[1,b,i,nbpixok+j]         = -elem4
+                    newcov[1, b, nbpixok+i, nbpixok+j] = elem1
+                    newcov[1, b, nbpixok+i, j] = -elem2
+                    newcov[1, b, i, j] = elem3
+                    newcov[1, b, i, nbpixok+j] = -elem4
 
-                    newcov[1,b,nbpixok+j,nbpixok+i] =  elem1
-                    newcov[1,b,j,nbpixok+i]         = -elem2
-                    newcov[1,b,j,i]                 =  elem3
-                    newcov[1,b,nbpixok+j,i]         = -elem4
+                    newcov[1, b, nbpixok+j, nbpixok+i] = elem1
+                    newcov[1, b, j, nbpixok+i] = -elem2
+                    newcov[1, b, j, i] = elem3
+                    newcov[1, b, nbpixok+j, i] = -elem4
 
                     # # EB ij then ji
                     if EBTB:
-                        newcov[2,b,i,j]                 = -elem2-elem4 # on QQ
-                        newcov[2,b,i,nbpixok+j]         =  elem1-elem3 # on QU
-                        newcov[2,b,nbpixok+i,nbpixok+j] =  elem2+elem4 # on UU
-                        newcov[2,b,nbpixok+i,j]         =  elem1-elem3 # on UQ
+                        # on QQ
+                        newcov[2, b, i, j] = -elem2-elem4
+                        # on QU
+                        newcov[2, b, i, nbpixok+j] = elem1-elem3
+                        # on UU
+                        newcov[2, b, nbpixok+i, nbpixok+j] = elem2+elem4
+                        # on UQ
+                        newcov[2, b, nbpixok+i, j] = elem1-elem3
 
-                        newcov[2,b,j,i]                 = -elem2-elem4 #
-                        newcov[2,b,nbpixok+j,i]         =  elem1-elem3 #
-                        newcov[2,b,nbpixok+j,nbpixok+i] =  elem2+elem4 #
-                        newcov[2,b,j,nbpixok+i]         =  elem1-elem3 #
+                        newcov[2, b, j, i] = -elem2-elem4
+                        newcov[2, b, nbpixok+j, i] = elem1-elem3
+                        newcov[2, b, nbpixok+j, nbpixok+i] = elem2+elem4
+                        newcov[2, b, j, nbpixok+i] = elem1-elem3
 
-                        elemQ22 = np.sum(( norm*( Q22 ) )[masks[b]] )  #EB on all
-                        elemR22 = np.sum(( norm*( - R22) )[masks[b]] )  #EB on all
-                        newcov[2,b,0*nbpixok+i,0*nbpixok+j] = ( sij*cji*(elemR22+elemQ22) + cij*sji*(elemQ22+elemR22)) # on QQ
-                        newcov[2,b,0*nbpixok+i,1*nbpixok+j] = (-sij*sji*(elemR22+elemQ22) + cij*cji*(elemQ22+elemR22)) # on QU
-                        newcov[2,b,1*nbpixok+i,1*nbpixok+j] = (-cij*sji*(elemR22+elemQ22) - sij*cji*(elemQ22+elemR22)) # on UU
-                        newcov[2,b,1*nbpixok+i,0*nbpixok+j] = ( cij*cji*(elemR22+elemQ22) - sij*sji*(elemQ22+elemR22)) # on UQ
-                        newcov[2,b,0*nbpixok+j,0*nbpixok+i] = ( sij*cji*(elemR22+elemQ22) + cij*sji*(elemQ22+elemR22)) # to 3
-                        newcov[2,b,1*nbpixok+j,0*nbpixok+i] = (-sij*sji*(elemR22+elemQ22) + cij*cji*(elemQ22+elemR22)) # to -4
-                        newcov[2,b,1*nbpixok+j,1*nbpixok+i] = (-cij*sji*(elemR22+elemQ22) - sij*cji*(elemQ22+elemR22)) # to 1
-                        newcov[2,b,0*nbpixok+j,1*nbpixok+i] = ( cij*cji*(elemR22+elemQ22) - sij*sji*(elemQ22+elemR22)) # to -2
+                        # EB on all
+                        elemQ22 = np.sum((norm * (Q22))[masks[b]])
+                        # EB on all
+                        elemR22 = np.sum((norm * (-R22))[masks[b]])
+                        # on QQ
+                        newcov[2, b, 0*nbpixok+i, 0*nbpixok+j] = (
+                            sij*cji*(elemR22+elemQ22) +
+                            cij*sji*(elemQ22+elemR22))
+                        # on QU
+                        newcov[2, b, 0*nbpixok+i, 1*nbpixok+j] = (
+                            -sij*sji*(elemR22+elemQ22) +
+                            cij*cji*(elemQ22+elemR22))
+                        # on UU
+                        newcov[2, b, 1*nbpixok+i, 1*nbpixok+j] = (
+                            -cij*sji*(elemR22+elemQ22) -
+                            sij*cji*(elemQ22+elemR22))
+                        # on UQ
+                        newcov[2, b, 1*nbpixok+i, 0*nbpixok+j] = (
+                            cij*cji*(elemR22+elemQ22) -
+                            sij*sji*(elemQ22+elemR22))
+                        # to 3
+                        newcov[2, b, 0*nbpixok+j, 0*nbpixok+i] = (
+                            sij*cji*(elemR22+elemQ22) +
+                            cij*sji*(elemQ22+elemR22))
+                        # to -4
+                        newcov[2, b, 1*nbpixok+j, 0*nbpixok+i] = (
+                            -sij*sji*(elemR22+elemQ22) +
+                            cij*cji*(elemQ22+elemR22))
+                        # to 1
+                        newcov[2, b, 1*nbpixok+j, 1*nbpixok+i] = (
+                            -cij*sji*(elemR22+elemQ22) -
+                            sij*cji*(elemQ22+elemR22))
+                        # to -2
+                        newcov[2, b, 0*nbpixok+j, 1*nbpixok+i] = (
+                            cij*cji*(elemR22+elemQ22) -
+                            sij*sji*(elemQ22+elemR22))
 
     return (newcov, Smatrix)
 
@@ -578,7 +680,7 @@ def S_bins_fast(
     nbins = len(ellbins) - 1
     # define min
     minell = np.array(ellbins[0: nbins])
-    maxell = np.array(ellbins[1: nbins + 1]) - 1 # and max of a bin
+    maxell = np.array(ellbins[1: nbins + 1]) - 1
     ellval = (minell + maxell) * 0.5
 
     print('minell:', minell)
@@ -612,34 +714,39 @@ def S_bins_fast(
 
     # assure que ell.max < lmax
     maskl = ell < (lmax + 1)
-    masklRQ = (np.arange(lmax + 1) >= min(ell)) & (np.arange(lmax + 1)<(lmax + 1))
+    masklRQ = (
+        np.arange(lmax + 1) >= min(ell)) & (np.arange(lmax + 1) < (lmax + 1))
 
     # define Pixel window function
     ll = np.arange(Slmax + 2)
 
     if pixwining:
         prepixwin = np.array(hp.pixwin(nside, pol=True))
-        poly = np.polyfit(np.arange(len(prepixwin[int(polar), 2:])), np.log(prepixwin[int(polar), 2:]), deg=3, w=np.sqrt(prepixwin[int(polar), 2:]))
+        poly = np.polyfit(
+            np.arange(len(prepixwin[int(polar), 2:])),
+            np.log(prepixwin[int(polar), 2:]),
+            deg=3,
+            w=np.sqrt(prepixwin[int(polar), 2:]))
         y_int = np.polyval(poly, np.arange(Slmax))
         fpixwin = np.exp(y_int)
-        fpixwin = np.append(prepixwin[int(polar)][2:], fpixwin[len(prepixwin[0]) - 2:])[: Slmax]
-        # fpixwin = np.array(hp.pixwin(nside, pol=True))[int(polar)][2:]
+        fpixwin = np.append(
+            prepixwin[int(polar)][2:],
+            fpixwin[len(prepixwin[0]) - 2:])[: Slmax]
     else:
         # ???
         fpixwin = ll[2:] * 0 + 1
 
     print("shape fpixwin", np.shape(fpixwin))
     print("shape bl", np.shape(bl[:Slmax+2]))
-    # print("long pixwin", fpixwin, "short", np.array(hp.pixwin(nside, pol=True))[int(polar)])
-    norm=(2*ll[2:]+1)/(4.*np.pi)*(fpixwin**2)*(bl[2:Slmax+2]**2)
+    norm = (2 * ll[2:]+1) / (4.*np.pi)*(fpixwin**2)*(bl[2: Slmax+2]**2)
     print("norm ", np.shape(norm))
     print("ell ", np.shape(ell))
 
     #### define masks for ell bins
-    masks=[]
+    masks = []
     for i in np.arange(nbins):
         # masks.append((ell>=minell[i]) & (ell<=maxell[i]))
-        masks.append((ll[2:]>=minell[i]) & (ll[2:]<=maxell[i]))
+        masks.append((ll[2:] >= minell[i]) & (ll[2:] <= maxell[i]))
     masks = np.array(masks)
     print('Bins mask shape :', np.shape(masks))
     print("norm", norm)
@@ -648,26 +755,26 @@ def S_bins_fast(
     print(masks*1)
 
     ### Create array for covariances matrices per bin
-    nbpixok=ipok.size
-    nstokes=np.size(allStoke)
+    nbpixok = ipok.size
+    nstokes = np.size(allStoke)
     print('creating array')
-    # newcov=np.zeros((nder,nbins,nstokes*nbpixok,nstokes*nbpixok)) # final ds_dcb
-    Smatrix = np.zeros((nstokes*nbpixok,nstokes*nbpixok)) # Signal matrix S
+    # Signal matrix S
+    Smatrix = np.zeros((nstokes*nbpixok, nstokes*nbpixok))
 
     start = timeit.default_timer()
     for i in np.arange(nbpixok):
         if timing:
-            progress_bar(i,nbpixok, -.5*(start-timeit.default_timer()))
-        for j in np.arange(i,nbpixok):
-            if nstokes==1:
-                pl=pl0(allcosang[i,j],Slmax+1)[2:]
-                elem = np.sum((norm*pl*clth[0,2:Slmax+2])[:-1])
-                Smatrix[i,j] = elem
-                Smatrix[j,i] = elem
-            elif nstokes==2:
-                cij,sij=polrotangle(rpix[:,i],rpix[:,j])
-                cji,sji=polrotangle(rpix[:,j],rpix[:,i])
-                cos_chi = allcosang[i,j]
+            progress_bar(i, nbpixok, -0.5*(start-timeit.default_timer()))
+        for j in np.arange(i, nbpixok):
+            if nstokes == 1:
+                pl = pl0(allcosang[i, j], Slmax+1)[2:]
+                elem = np.sum((norm*pl*clth[0, 2: Slmax+2])[:-1])
+                Smatrix[i, j] = elem
+                Smatrix[j, i] = elem
+            elif nstokes == 2:
+                cij, sij = polrotangle(rpix[:, i], rpix[:, j])
+                cji, sji = polrotangle(rpix[:, j], rpix[:, i])
+                cos_chi = allcosang[i, j]
 
                 # # # JC version
                 # Q22 =  F1l2(cos_chi,Slmax+1)[2:] #[masklRQ]
@@ -678,34 +785,64 @@ def S_bins_fast(
                 d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
                 d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
                 # # # P02 = -d20
-                Q22 = ( d2p2 + d2m2 )[2:]/2.
-                R22 = ( d2p2 - d2m2 )[2:]/2.
+                Q22 = (d2p2 + d2m2)[2:] / 2.0
+                R22 = (d2p2 - d2m2)[2:] / 2.0
 
-                elem1  = np.sum( (norm * ( cij*cji*Q22 + sij*sji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on QQ [masklRQ]
-                elem2  = np.sum( (norm * (-cij*sji*Q22 + sij*cji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on QU [masklRQ]
-                elem3  = np.sum( (norm * ( sij*sji*Q22 + cij*cji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on UU [masklRQ]
-                elem4  = np.sum( (norm * (-sij*cji*Q22 + cij*sji*R22)*(clth[1,2:Slmax+2]) )[:-1]) # EE on QU [masklRQ]
+                # EE on QQ [masklRQ]
+                elem1 = np.sum((norm * (
+                    cij*cji*Q22 + sij*sji*R22)*(clth[1, 2: Slmax+2]))[: -1])
+                # EE on QU [masklRQ]
+                elem2 = np.sum((norm * (
+                    -cij*sji*Q22 + sij*cji*R22)*(clth[1, 2: Slmax+2]))[:-1])
+                # EE on UU [masklRQ]
+                elem3 = np.sum((norm * (
+                    sij*sji*Q22 + cij*cji*R22)*(clth[1, 2: Slmax+2]))[:-1])
+                # EE on QU [masklRQ]
+                elem4 = np.sum((norm * (
+                    -sij*cji*Q22 + cij*sji*R22)*(clth[1, 2: Slmax+2]))[:-1])
 
-                elem3 += np.sum( (norm * ( cij*cji*Q22 + sij*sji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on QQ [masklRQ]
-                elem4 -= np.sum( (norm * (-cij*sji*Q22 + sij*cji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on QU [masklRQ]
-                elem1 += np.sum( (norm * ( sij*sji*Q22 + cij*cji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on UU [masklRQ]
-                elem2 -= np.sum( (norm * (-sij*cji*Q22 + cij*sji*R22)*(clth[2,2:Slmax+2]) )[:-1]) # BB on UQ [masklRQ]
+                # BB on QQ [masklRQ]
+                elem3 += np.sum((norm * (
+                    cij*cji*Q22 + sij*sji*R22)*(clth[2, 2: Slmax+2]))[:-1])
+                # BB on QU [masklRQ]
+                elem4 -= np.sum((norm * (
+                    -cij*sji*Q22 + sij*cji*R22)*(clth[2, 2: Slmax+2]))[:-1])
+                # BB on UU [masklRQ]
+                elem1 += np.sum((norm * (
+                    sij*sji*Q22 + cij*cji*R22)*(clth[2, 2: Slmax+2]))[:-1])
+                # BB on UQ [masklRQ]
+                elem2 -= np.sum((norm * (
+                    -sij*cji*Q22 + cij*sji*R22)*(clth[2, 2: Slmax+2]))[:-1])
 
                 if EBTB:
-                    elem = np.sum( (norm * ( Q22 - R22)*(clth[4,2:Slmax+2]) )[:-1] )  #EB on all
-                    elem1 += ( cji*sij + sji*cij)*elem # EB on QQ
-                    elem2 += (-sji*sij + cji*cij)*elem # EB on QU
-                    elem3 += (-sji*cij - cji*sij)*elem # EB on UU
-                    elem4 += ( cji*cij - sji*sij)*elem # EB on QU
+                    # EB on all
+                    elem = np.sum((
+                        norm * (Q22 - R22)*(clth[4, 2: Slmax+2]))[:-1])
+                    # EB on QQ
+                    elem1 += (cji*sij + sji*cij)*elem
+                    # EB on QU
+                    elem2 += (-sji*sij + cji*cij)*elem
+                    # EB on UU
+                    elem3 += (-sji*cij - cji*sij)*elem
+                    # EB on QU
+                    elem4 += (cji*cij - sji*sij)*elem
 
-                Smatrix[0*nbpixok+i,0*nbpixok+j] =  elem1 # to 3
-                Smatrix[0*nbpixok+i,1*nbpixok+j] =  elem2 # to -4
-                Smatrix[1*nbpixok+i,1*nbpixok+j] =  elem3 # to 1
-                Smatrix[1*nbpixok+i,0*nbpixok+j] =  elem4 # to -2
+                # to 3
+                Smatrix[0*nbpixok+i, 0*nbpixok+j] = elem1
+                # to -4
+                Smatrix[0*nbpixok+i, 1*nbpixok+j] = elem2
+                # to 1
+                Smatrix[1*nbpixok+i, 1*nbpixok+j] = elem3
+                # to -2
+                Smatrix[1*nbpixok+i, 0*nbpixok+j] = elem4
 
-                Smatrix[0*nbpixok+j,0*nbpixok+i] =  elem1 # to 3
-                Smatrix[1*nbpixok+j,0*nbpixok+i] =  elem2 # to -4
-                Smatrix[1*nbpixok+j,1*nbpixok+i] =  elem3 # to 1
-                Smatrix[0*nbpixok+j,1*nbpixok+i] =  elem4 # to -2
+                # to 3
+                Smatrix[0*nbpixok+j, 0*nbpixok+i] = elem1
+                # to -4
+                Smatrix[1*nbpixok+j, 0*nbpixok+i] = elem2
+                # to 1
+                Smatrix[1*nbpixok+j, 1*nbpixok+i] = elem3
+                # to -2
+                Smatrix[0*nbpixok+j, 1*nbpixok+i] = elem4
 
     return (Smatrix)
