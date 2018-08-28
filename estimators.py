@@ -1,29 +1,46 @@
 """
 Set of routines to ...
 
-Comment: what is Expd()? It is defined nowhere in the code...
-
 Author: Vanneste
 """
 from __future__ import division
 
 import numpy as np
 
+
 def Pl(ds_dcb):
     """
-    Reshape ds_dcbin Pl
+    Reshape ds_dcb (nspec, nbins) into Pl (nspec * nbins)
 
     Parameters
     ----------
-    ds_dcb : ???
-        ???
+    ds_dcb : ndarray of floats
+        Normalize Legendre polynomials (2l + 1)/2pi * pl
 
     Returns
     ----------
-    ???
+    Pl : ndarray of floats
+        Rescaled normalize Legendre polynomials dS/dCl
+
+    Example
+    ----------
+    >>> thePl = Pl(np.arange(16).reshape((2,2,2,2)))
+    >>> print(thePl) # doctest: +NORMALIZE_WHITESPACE
+    [[[ 0  1]
+      [ 2  3]]
+    <BLANKLINE>
+     [[ 4  5]
+      [ 6  7]]
+    <BLANKLINE>
+     [[ 8  9]
+      [10 11]]
+    <BLANKLINE>
+     [[12 13]
+      [14 15]]]
     """
     nnpix = np.shape(ds_dcb)[-1]
     return np.copy(ds_dcb).reshape(2 * (np.shape(ds_dcb)[1]), nnpix, nnpix)
+
 
 def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
     """
@@ -31,12 +48,33 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
 
     Parameters
     ----------
-    Clth : ???
-        ???
+    Clth : 1D array of float
+        Fiducial spectra
+    Pl : ndarray of floats
+        Rescaled normalize Legendre polynomials dS_dCb
+    ellbins : array of integers
+        Bins lower bound
+    polar : bool
+        If True, get Stokes parameters for polar (default: True)
+    temp : bool
+        If True, get Stokes parameters for temperature (default: False)
+    EBTB : bool
+        If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
     ----------
-    ???
+    S : 2D square matrix of float (npix, npix)
+        Pixel covariance matrix
+
+    Example
+    ----------
+    >>> Pl = np.arange(10).reshape(2,-1)
+    >>> Clth = np.arange(40).reshape(4,-1)
+    >>> ellbins = np.arange(2,10,1)
+    >>> S = CorrelationMatrix(Clth, Pl, ellbins)
+    >>> print(S) # doctest: +NORMALIZE_WHITESPACE
+    [[   0  280  560  840 1120]
+     [1400 1680 1960 2240 2520]]
     """
     if EBTB:
         xx = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
@@ -59,110 +97,79 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
         ind = [0]
 
     clth = Clth[ind][:, 2: int(ellbins[-1])].flatten()
-    return np.sum(Pl * clth[:, None, None], 0)
+    S = np.sum(Pl * clth[:, None, None], 0)
+    return S
 
-def El(invCAA, invCBB, Pl, Bll=None, expend=False):
+
+def El(invCAA, invCBB, Pl):
     """
-    Compute El = invCAA.Pl.invCBB
+    Compute El = CAA^-1.Pl.CBB^-1
 
     Parameters
     ----------
-    invCAA : ???
-        ???
+    invCAA : square matrix array of float
+        Inverse pixel covariance matrix of dataset A
+    invCBB : square matrix array of float
+        Inverse pixel covariance matrix of dataset B
+    Pl : ndarray of floats
+        Rescaled normalize Legendre polynomials dS/dCl
 
     Returns
     ----------
-    ???
-    """
-    # Tegmark B-matrix useless so far)
-    if Bll is None:
-        Bll = np.diagflat((np.ones(len(Pl))))
+    El : array of float (shape(Pl))
+        Quadratic parameter matrices such that yl = dA.El.dB.T
 
-    lmax = len(Pl) * 2**int(expend)
+    Example
+    ----------
+    >>> Pl = np.arange(12).reshape(3,2,2)
+    >>> invCAA = np.array([[1,2],[2,3]])
+    >>> invCBB = np.array([[4,3],[3,6]])
+    >>> print(El(invCAA, invCBB, Pl))
+    [[[ 37  54]
+      [ 57  84]]
+    <BLANKLINE>
+     [[121 162]
+      [197 264]]
+    <BLANKLINE>
+     [[205 270]
+      [337 444]]]
+
+    """
+
+    lmax = len(Pl)
     lrange = np.arange(lmax)
     npix = len(invCAA)
-    # triangular shape ds_dcb
-    if expend:
-        El = np.array(
-            [np.dot(np.dot(invCAA, Expd(Pl, l)), invCBB) for l in lrange]
-            ).reshape((lmax, npix, npix))
-    else:
-        El = np.array(
-            [np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]
-            ).reshape((lmax, npix, npix))
+    El = np.array(
+        [np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]
+        ).reshape((lmax, npix, npix))
     return El
 
-def ElLong(invCAA, invCBB, Pl, Bll=None, expend=False):
-    """
-    Compute El = invCAA.Pl.invCBB
-
-    Parameters
-    ----------
-    invCAA : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    # Tegmark B-matrix useless so far)
-    if Bll is None:
-        Bll = np.diagflat((np.ones(len(Pl))))
-
-    lmax = len(Pl) * 2**int(expend)
-    lrange = np.arange(lmax)
-    npix = len(invCAA)
-    # triangular shape ds_dcb
-    if expend:
-        for l in lrange:
-            Pl[l] = np.dot(
-                np.dot(invCAA, Expd(Pl, l)), invCBB).reshape((npix, npix))
-    else:
-        for l in lrange:
-            Pl[l] = np.dot(np.dot(invCAA, Pl[l]), invCBB).reshape((npix, npix))
-
-def CrossFisherMatrix(El, Pl, expend=False):
-    """
-    Compute cross (or auto) fisher matrix
-    Fll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
-
-    Parameters
-    ----------
-    El : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    lmax = len(Pl) * 2**int(expend)
-    lrange = np.arange(lmax)
-    if expend:
-        # pas de transpose car symm
-        FAB = np.array(
-            [np.sum(El[il] * Expd(Pl, jl)) for il in lrange for jl in lrange]
-            ).reshape(lmax, lmax)
-    else:
-        # pas de transpose car symm
-        FAB = np.array(
-            [np.sum(El[il] * Pl[jl]) for il in lrange for jl in lrange]
-            ).reshape(lmax, lmax)
-    return FAB
 
 def CrossWindowFunction(El, Pl):
     """
-    Compute Tegmark cross (or auto) window matrix
+    Compute mode-mixign matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
-    Equivalent to Fisher matrix Fll when Tegmark B-matrix = 1
 
     Parameters
     ----------
-    El : ???
-        ???
+    El : ndarray of floats
+        Quadratic parameter matrices such that yl = dA.El.dB.T
+    Pl : ndarray of floats
+        Rescaled normalize Legendre polynomials dS/dCl
 
     Returns
     ----------
-    ???
+    Wll : 2D square matrix array of floats
+        Mode-mixing matrix of dimension (nspec * nbins)
+
+    Example
+    ----------
+    >>> Pl = np.arange(12).reshape(3,2,2)
+    >>> El = np.arange(12,24).reshape(3,2,2)
+    >>> print(CrossWindowFunction(El, Pl))
+    [[ 86 302 518]
+     [110 390 670]
+     [134 478 822]]
     """
     lmax = len(El)
     lrange = np.arange((lmax))
@@ -172,20 +179,35 @@ def CrossWindowFunction(El, Pl):
         ).reshape(lmax, lmax)
     return Wll
 
+
 def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     """
-    Compute Tegmark cross (or auto) window matrix
+    Compute mode-mixign matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
-    Equivalent to Fisher matrix Fll when Tegmark B-matrix = 1
 
     Parameters
     ----------
-    invCAA : ???
-        ???
+    invCAA : square matrix array of float
+        Inverse pixel covariance matrix of dataset A
+    invCBB : square matrix array of float
+        Inverse pixel covariance matrix of dataset B
+    Pl : ndarray of floats
+        Rescaled normalize Legendre polynomials dS/dCl
 
     Returns
     ----------
-    ???
+    Wll : 2D square matrix array of floats
+        Mode-mixing matrix of dimension (nspec * nbins, nspec * nbins)
+
+    Example
+    ----------
+    >>> Pl = np.arange(12).reshape(3,2,2)
+    >>> invCAA = np.array([[1,2],[2,3]])
+    >>> invCBB = np.array([[4,3],[3,6]])
+    >>> print(CrossWindowFunctionLong(invCAA, invCBB, Pl))
+    [[  420  1348  2276]
+     [ 1348  4324  7300]
+     [ 2276  7300 12324]]
     """
     lmax = len(Pl)
     lrange = np.arange((lmax))
@@ -195,40 +217,30 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl):
          for il in lrange for jl in lrange]).reshape(lmax, lmax)
     return Wll
 
-def CrossMisherMatrix(El, CAA, CBB):
-    """
-    Compute matrix MAB = Trace[El.CAA.El.CBB] (see paper for definition)
-
-    Parameters
-    ----------
-    El : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    lmax = len(El)
-    lrange = np.arange(lmax)
-    El_CAA = np.array([np.dot(CAA, El[il]) for il in lrange])
-    El_CBB = np.array([np.dot(CBB, El[il]) for il in lrange])
-    MAB = np.array(
-        [np.sum(El_CAA[il] * El_CBB[jl].T) for il in lrange for jl in lrange]
-        ).reshape(lmax, lmax)
-    return MAB
 
 def CrossGisherMatrix(El, CAB):
     """
-    Compute matrix GAB = Trace[El.CAB.El.CAB] (see paper for definition)
+    Compute matrix GAB = Trace[El.CAB.El.CAB]
 
     Parameters
     ----------
-    El : ???
-        ???
+    CAB : 2D square matrix array of floats
+        Pixel covariance matrix between dataset A and B
+    El : ndarray of floats
+        Quadratic parameter matrices such that yl = dA.El.dB.T
 
     Returns
     ----------
-    ???
+    GAB : 2D square matrix array of floats
+
+     Example
+    ----------
+    >>> El = np.arange(12).reshape(3,2,2)
+    >>> CAB = np.array([[1,2],[2,3]])
+    >>> print(CrossGisherMatrix(El, CAB))
+    [[ 221  701 1181]
+     [ 701 2205 3709]
+     [1181 3709 6237]]
     """
     lmax = len(El)
     lrange = np.arange(lmax)
@@ -238,18 +250,31 @@ def CrossGisherMatrix(El, CAB):
         ).reshape(lmax, lmax)
     return GAB
 
+
 def CrossGisherMatrixLong(El, CAB):
     """
-    Compute matrix GAB = Trace[El.CAB.El.CAB] (see paper for definition)
+    Compute matrix GAB = Trace[El.CAB.El.CAB]
 
     Parameters
     ----------
-    El : ???
-        ???
+    CAB : 2D square matrix array of floats
+        Pixel covariance matrix between dataset A and B
+    El : ndarray of floats
+        Quadratic parameter matrices such that yl = dA.El.dB.T
 
     Returns
     ----------
-    ???
+    GAB : 2D square matrix array of floats
+
+    Example
+    ----------
+    >>> El = np.arange(12).reshape(3,2,2)
+    >>> CAB = np.array([[1,2],[2,3]])
+    >>> print(CrossGisherMatrixLong(El, CAB))
+    [[ 221  701 1181]
+     [ 701 2205 3709]
+     [1181 3709 6237]]
+
     """
     lmax = len(El)
     lrange = np.arange(lmax)
@@ -258,23 +283,33 @@ def CrossGisherMatrixLong(El, CAB):
          for il in lrange for jl in lrange]).reshape(lmax, lmax)
     return GAB
 
+
 def yQuadEstimator(dA, dB, El):
     """
     Compute pre-estimator 'y' such that Cl = Fll^-1 . yl
 
     Parameters
     ----------
-    dA : ???
-        ???
+    dA : array of floats
+        Pixels dataset A
+    dB : array of floats
+        Pixels dataset B
+    El : ndarray of floats
+        Quadratic parameter matrices such that yl = dA.El.dB.T
 
     Returns
     ----------
-    ???
+    >>> dA = np.arange(12)
+    >>> dB = np.arange(12,24)
+    >>> El = np.arange(3*12**2).reshape(3,12,12)
+    >>> print(yQuadEstimator(dA, dB, El))
+    [1360788 3356628 5352468]
     """
     npix = len(dA)
     lrange = np.arange((len(El)))
     y = np.array([dA.dot(El[l]).dot(dB) for l in lrange])
     return y
+
 
 def ClQuadEstimator(invW, y):
     """
@@ -282,49 +317,59 @@ def ClQuadEstimator(invW, y):
 
     Parameters
     ----------
-    invW : ???
-        ???
+    invW : 2D square matrix array of floats
+        Inverse mode-mixing matrix Wll'^-1
 
     Returns
     ----------
-    ???
+    Cl : array of floats
+        Unbiased estimated spectra
+
+    Example
+    ----------
+    >>> invW = np.array([[1,2], [2,4]])
+    >>> yl = np.array([3,7])
+    >>> print(ClQuadEstimator(invW, yl))
+    [17 34]
     """
     Cl = np.dot(invW, y)
     return Cl
 
-def biasQuadEstimator(NoiseN, El):
-    """
-    Compute bias term bl such that Cl = Fll^-1 . ( yl + bias)
 
-    Parameters
-    ----------
-    NoiseN : ???
-        ???
+# def biasQuadEstimator(NoiseN, El):
+#     """
+#     Compute bias term bl such that Cl = Fll^-1 . ( yl + bias)
 
-    Returns
-    ----------
-    ???
-    """
-    lrange = np.arange((len(El)))
-    return np.array([np.sum(NoiseN * El[l]) for l in lrange])
+#     Parameters
+#     ----------
+#     NoiseN : ???
+#         ???
 
-def blEstimatorFlat(NoiseN, El):
-    """
-    Compute bias term bl such that Cl = Fll^-1 . ( yl + bl)
-    Not to be confonded with beam function bl(fwhm)
+#     Returns
+#     ----------
+#     ???
+#     """
+#     lrange = np.arange((len(El)))
+#     return np.array([np.sum(NoiseN * El[l]) for l in lrange])
 
-    Parameters
-    ----------
-    NoiseN : ???
-        ???
 
-    Returns
-    ----------
-    ???
-    """
-    lrange = np.arange((len(El)))
+# def blEstimatorFlat(NoiseN, El):
+#     """
+#     Compute bias term bl such that Cl = Fll^-1 . ( yl + bl)
+#     Not to be confonded with beam function bl(fwhm)
 
-    return np.array([np.sum(NoiseN * np.diag(El[l])) for l in lrange])
+#     Parameters
+#     ----------
+#     NoiseN : ???
+#         ???
+
+#     Returns
+#     ----------
+#     ???
+#     """
+#     lrange = np.arange((len(El)))
+
+#     return np.array([np.sum(NoiseN * np.diag(El[l])) for l in lrange])
 
 
 def CovAB(invWll, GAB):
@@ -333,12 +378,64 @@ def CovAB(invWll, GAB):
 
     Parameters
     ----------
-    invWll : ???
-        ???
+    invWll : 2D square matrix of floats
+        Inverse of the mode-mixing matrix Wll'=Tr[El.Pl']
 
     Returns
     ----------
-    ???
+    covAB : 2D square matrix array of floats
+        Analytical covariance of estimate spectra
+
+    Example
+    ----------
+    >>> invW = np.array([[1,2], [2,4]])
+    >>> GAB = np.array([[5,3], [3,2]])
+    >>> print(CovAB(invW, GAB))
+    [[ 26  52]
+     [ 52 104]]
     """
     covAB = np.dot(np.dot(invWll, GAB), invWll.T) + invWll
     return covAB
+
+
+# def GetCorr(F):
+#     """
+#     Return correlation of covariance matrix
+#     corr(F) = F[i, j] / sqrt(F[i, i]*F[j, j])
+
+#     Parameters
+#     ----------
+#     F : 2D square matrix array (n,n)
+#         Covariance matrix
+
+#     Returns
+#     ----------
+#     Corr : 2D square matrix array (n,n)
+#         Correlation matrix from F
+
+#     Example
+#     ----------
+#     >>> CorrF = GetCorr(np.matrix('1 .5; .5 4'))
+#     >>> print(CorrF) # doctest: +NORMALIZE_WHITESPACE
+#     [[ 1.    0.25]
+#      [ 0.25  1.  ]]
+#     """
+#     nbins = len(F)
+#     Corr = np.array(
+#         [F[i, j] / (F[i, i]*F[j, j])**.5 for i in np.arange(nbins)
+#             for j in np.arange(nbins)]).reshape(nbins, nbins)
+#     return Corr
+
+if __name__ == "__main__":
+    """
+    Run the doctest using
+
+    python simulation.py
+
+    If the tests are OK, the script should exit gracefuly, otherwise the
+    failure(s) will be printed out.
+    """
+    import doctest
+    if np.__version__ >= "1.14.0":
+        np.set_printoptions(legacy="1.13")
+    doctest.testmod()

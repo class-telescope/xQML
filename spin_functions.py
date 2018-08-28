@@ -1,5 +1,6 @@
 """
-Set of routines to ...
+Set of routines to compute the pixel covariance matrix using
+Legendre polynomials
 
 Author: Vanneste
 """
@@ -10,18 +11,19 @@ import math
 import numpy as np
 from scipy import special
 
+
 def dlss(z, s1, s2, lmax):
     """
-    Matt version ???
+    Computes the reduced Wigner D-function d^l_ss'
 
     Parameters
     ----------
-    z : ???
-        ???
+    z : float
+        Cosine of the angle between two pixels
     s1 : int
-        Spin number ???
+        Spin number 1
     s2 : int
-        Spin number ???
+        Spin number 2
     lmax : int
         Maximum multipole
 
@@ -30,6 +32,11 @@ def dlss(z, s1, s2, lmax):
     d : 1D array of floats
         ???
 
+    Example
+    ----------
+    >>> d = dlss(0.1, 2,  2, 5)
+    >>> print(round(sum(d),5))
+    0.24351
     """
     d = np.zeros((lmax + 1))
     if s1 < abs(s2):
@@ -65,151 +72,184 @@ def dlss(z, s1, s2, lmax):
 
 def pl0(z, lmax):
     """
-    Compute sequence of Legendre functions of the first kind (polynomials),
-    Pn(z) and derivatives for all degrees from 0 to lmax (inclusive).
+    Computes the associated Legendre function of the first kind of order 0
+    Pn(z) from 0 to lmax (inclusive).
 
     Parameters
     ----------
-    z : ???
-        ???
+    z : float
+        Cosine of the angle between two pixels
     lmax : int
         Maximum multipole
 
     Returns
     ----------
-    ???
+    Pn : 1D array of floats
+    Legendre function
 
+    Example
+    ----------
+    >>> thepl0 = pl0(0.1, 5)
+    >>> print(round(sum(thepl0),5))
+    0.98427
     """
-    # 0 is for no derivative?
-    return special.lpn(lmax, z)[0]
+    Pn = special.lpn(lmax, z)[0]
+    return Pn
+
 
 def pl2(z, lmax):
     """
-    Computes the associated Legendre function of the first kind of order m and
-    degree n, ``Pmn(z)`` = :math:`P_n^m(z)`, and its derivative
+    Computes the associated Legendre function of the first kind of order 2
+    from 0 to lmax (inclusive)
 
     Parameters
     ----------
-    z : ???
-        ???
+    z : float
+        Cosine of the angle between two pixels
     lmax : int
         Maximum multipole
 
     Returns
     ----------
-    ???
+    Pn2 : 1D array of floats
+    Legendre function
+
+    Example
+    ----------
+    >>> thepl2 = pl2(0.1, 5)
+    >>> print(round(sum(thepl2),5))
+    -7.49183
     """
-    return(special.lpmn(2, lmax, z)[0][2])
+    Pn2 = special.lpmn(2, lmax, z)[0][2]
+    return Pn2
 
 
-######## F1 and F2 functions from Tegmark & De Oliveira-Costa, 2000  ##########
+# ####### F1 and F2 functions from Tegmark & De Oliveira-Costa, 2000  #########
 def F1l0(z, lmax):
     """
-    ???
+    Compute the F1l0 function from Tegmark & De Oliveira-Costa, 2000
 
     Parameters
     ----------
-    z : ???
-        ???
+    z : float
+        Cosine of the angle between two pixels
     lmax : int
         Maximum multipole
 
     Returns
     ----------
-    ???
+    bla : 1D array of float
+    F1l0 function from Tegmark & De Oliveira-Costa, 2000
+
+    Example
+    ----------
+    >>> theF1l0= F1l0(0.1, 5)
+    >>> print(round(sum(theF1l0),5))
+    0.20392
     """
     if abs(z) == 1.0:
         return(np.zeros(lmax + 1))
     else:
-        ell = np.arange(lmax + 1)
+        ell = np.arange(2, lmax + 1)
         thepl = pl0(z, lmax)
-        theplm1 = np.append(0, pl0(z, lmax - 1))
+        theplm1 = np.append(0, thepl[:-1])
+        thepl = thepl[2:]
+        theplm1 = theplm1[2:]
         a0 = 2.0 / np.sqrt((ell - 1) * ell * (ell + 1) * (ell + 2))
         a1 = ell * z * theplm1 / (1 - z**2)
         a2 = (ell / (1 - z**2) + ell * (ell - 1) / 2) * thepl
-        bla = a0 * (a1 - a2)
-        # deux premiers poles
-        bla[0] = 0.0
-        bla[1] = 0.0
-
+        bla = np.append([0, 0], a0 * (a1 - a2))
         return bla
+
 
 def F1l2(z, lmax):
     """
-    ???
+    Compute the F1l2 function from Tegmark & De Oliveira-Costa, 2000
 
     Parameters
     ----------
-    z : ???
-        ???
+    z : float
+        Cosine of the angle between two pixels
     lmax : int
         Maximum multipole
 
     Returns
     ----------
-    ???
+    bla : 1D array of float
+    F1l2 function from Tegmark & De Oliveira-Costa, 2000
+
+    Example
+    ----------
+    >>> theF1l2= F1l2(0.1, 5)
+    >>> print(round(sum(theF1l2),5))
+    0.58396
     """
     if z == 1.0:
-        # former version
-        # return(np.ones(lmax+1)*0.5)
-        # = 0 pour l=0,1
         return np.append(np.zeros(2), np.ones(lmax - 1) * 0.5)
     elif z == -1.0:
         ell = np.arange(lmax + 1)
-        # former version
-        # return(0.5*(-1)**ell)
-        # = 0 pour l=0,1
         return np.append(np.zeros(2), 0.5 * (-1)**ell[2:])
     else:
-        ell = np.arange(lmax + 1)
+        ell = np.arange(2, lmax + 1)
         thepl2 = pl2(z, lmax)
-        theplm1_2 = np.append(0, pl2(z, lmax - 1))
+        theplm1_2 = np.append(0, thepl2[:-1])
+        thepl2 = thepl2[2:]
+        theplm1_2 = theplm1_2[2:]
         a0 = 2.0 / ((ell - 1) * ell * (ell + 1) * (ell + 2))
         a1 = (ell + 2) * z * theplm1_2 / (1 - z**2)
         a2 = ((ell - 4) / (1 - z**2) + ell * (ell - 1) / 2) * thepl2
-        bla = a0 * (a1 - a2)
-        # deux premiers poles
-        bla[0] = 0.0
-        bla[1] = 0.0
-
+        bla = np.append([0, 0], a0 * (a1 - a2))
         return bla
 
-def F2l2(z,lmax):
+
+def F2l2(z, lmax):
     """
-    ???
+    Compute the F2l2 function from Tegmark & De Oliveira-Costa, 2000
 
     Parameters
     ----------
-    z : ???
-        ???
+    z : float
+        Cosine of the angle between two pixels
     lmax : int
         Maximum multipole
 
     Returns
     ----------
     ???
+
+    Example
+    ----------
+    >>> theF2l2= F2l2(0.1, 5)
+    >>> print(round(sum(theF2l2),5))
+    0.34045
     """
     if z == 1.0:
-        # former version
-        # return(-0.5*np.ones(lmax+1))
-        # = 0 pour l=0,1
         return np.append(np.zeros(2), -0.5 * np.ones(lmax - 1))
     elif z == -1.0:
         ell = np.arange(lmax + 1)
-        # former version
-        # return(0.5*(-1)**ell)
-        # syl : = 0 pour l=0,1
         return np.append(np.zeros(2), 0.5 * (-1)**ell[2:])
     else:
-        ell = np.arange(lmax + 1)
+        ell = np.arange(2, lmax + 1)
         thepl2 = pl2(z, lmax)
-        theplm1_2 = np.append(0, pl2(z, lmax - 1))
+        theplm1_2 = np.append(0, thepl2[:-1])
+        thepl2 = thepl2[2:]
+        theplm1_2 = theplm1_2[2:]
         a0 = 4.0 / ((ell - 1) * ell * (ell + 1) * (ell + 2) * (1 - z**2))
         a1 = (ell + 2) * theplm1_2
         a2 = (ell - 1) * z * thepl2
-        bla = a0 * (a1 - a2)
-        # ??
-        bla[0] = 0
-        bla[1] = 0
-
+        bla = np.append([0, 0], a0 * (a1 - a2))
         return bla
+
+if __name__ == "__main__":
+    """
+    Run the doctest using
+
+    python simulation.py
+
+    If the tests are OK, the script should exit gracefuly, otherwise the
+    failure(s) will be printed out.
+    """
+    import doctest
+    if np.__version__ >= "1.14.0":
+        np.set_printoptions(legacy="1.13")
+    doctest.testmod()

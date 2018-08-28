@@ -1,5 +1,5 @@
 """
-Set of routines to ...
+Set of routines to generate basic simulations 
 
 Author: Vanneste
 """
@@ -10,21 +10,22 @@ import healpy as hp
 
 from scipy import sparse
 
+
 def muKarcmin2var(muKarcmin, nside):
     """
     Return pixel variance for a given nside and noise level [1e-6 K . arcmin]
 
     Parameters
     ----------
-    muKarcmin : ???
-        ???
-    ...
+    muKarcmin : float
+        Pixel noise [muK . arcmin]
+    nside : int
+        Healpix map resolution (power of 2)
 
     Returns
     ----------
-    ??? : ???
-        ???
-
+    varperpix : float
+        Variance per pixel
 
     Example
     ----------
@@ -36,20 +37,22 @@ def muKarcmin2var(muKarcmin, nside):
     varperpix = (muKarcmin * 1e-6 / 60.)**2 / pixarea
     return varperpix
 
+
 def pixvar2nl(pixvar, nside):
     """
     Return noise spectrum level for a given nside and pixel variance
 
     Parameters
     ----------
-    pixvar : ???
-        ???
-    ...
+    pixvar : float
+        Variance per pixel
+    nside : int
+        Healpix map resolution (power of 2)
 
     Returns
     ----------
-    ??? : ???
-        ???
+    nl : float
+        Noise spectrum level
 
     Example
     ----------
@@ -59,7 +62,9 @@ def pixvar2nl(pixvar, nside):
     >>> print(round(nl * 1e18))
     8.0
     """
-    return pixvar*4.*np.pi/(12*nside**2.)
+    nl = pixvar*4.*np.pi/(12*nside**2.)
+    return nl
+
 
 def getNl(pixvar, nside, nbins):
     """
@@ -67,14 +72,17 @@ def getNl(pixvar, nside, nbins):
 
     Parameters
     ----------
-    pixvar : ???
-        ???
-    ...
+    pixvar : float
+        Variance per pixel
+    nside : int
+        Healpix map resolution (power of 2)
+    nbins : int
+        Number of bins
 
     Returns
     ----------
-    ??? : ???
-        ???
+    Nl : 1D array of float
+        Noise spectrum
 
     Example
     ----------
@@ -84,23 +92,31 @@ def getNl(pixvar, nside, nbins):
     >>> print(round(nl[0] * 1e18))
     8.0
     """
-    return pixvar*4.*np.pi/(12*nside**2.)*np.ones((nbins))
+    Nl = pixvar*4.*np.pi/(12*nside**2.)*np.ones((nbins))
+    return Nl
 
 
 def getstokes(polar=True, temp=False, EBTB=False):
     """
-    ???
+    Get the Stokes parameters number and name(s)
 
     Parameters
     ----------
-    polar : ???
-        ???
-    ...
+    polar : bool
+        If True, get Stokes parameters for polar (default: True)
+    temp : bool
+        If True, get Stokes parameters for temperature (default: False)
+    EBTB : bool
+        If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
     ----------
-    ??? : ???
-        ???
+    allStoke : list of string
+        Stokes variables names
+    spec : int
+        Spectra names
+    ind : list
+        Indexes of power spectra
 
     Example
     ----------
@@ -113,43 +129,62 @@ def getstokes(polar=True, temp=False, EBTB=False):
     """
     allStoke = ['I', 'Q', 'U']
     if EBTB:
-        der = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
+        spec = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
         ind = [0, 1, 2, 3, 4, 5]
     else:
-        der = ['TT', 'EE', 'BB', 'TE']
+        spec = ['TT', 'EE', 'BB', 'TE']
         ind = [0, 1, 2, 3]
     if not temp:
         allStoke = ['Q', 'U']
         if EBTB:
-            der = ['EE', 'BB', 'EB']
+            spec = ['EE', 'BB', 'EB']
             ind = [1, 2, 4]
         else:
-            der = ['EE', 'BB']
+            spec = ['EE', 'BB']
             ind = [1, 2]
     if not polar:
         allStoke = ['I']
-        der = ['TT']
+        spec = ['TT']
         ind = [0]
-    return allStoke, der, ind
+    return allStoke, spec, ind
+
 
 def GetBinningMatrix(
         ellbins, lmax, norm=False, polar=True,
-        temp=False, EBTB=False, verbose=False):
+        temp=False, EBTB=False):
     """
-    Return P and Q matrices such taht Cb = P.Cl and Vbb = P.Vll.Q
-    Return ell (total non-binned multipole range)
-    Return ellval (binned multipole range)
+    Return P (m,n) and Q (n,m) binning matrices such that
+    Cb = P.Cl and Vbb = P.Vll.Q with m the number of bins and
+    n the number of multipoles.
+    In addition, returns ell (total non-binned multipole range)
+    and ellval (binned multipole range)
 
     Parameters
     ----------
-    ellbins : ???
-        ???
-    ...
+    ellbins : list of integers
+        Bins lower bound
+    lmax : int
+        Maximum multipole
+    norm : bool (default: False)
+        If True, weight the binning scheme such that P = l*(l+1)/(2*pi)
+    polar : bool
+        If True, get Stokes parameters for polar (default: True)
+    temp : bool
+        If True, get Stokes parameters for temperature (default: False)
+    EBTB : bool
+        If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
     ----------
-    ??? : ???
-        ???
+    P : array of float (m,n)
+        Binning matrix such that Cb = P.Cl
+    Q : array of int (n,m)
+        Binning matrix such that P.Q = I
+        or P.Q = I * l(l+1)/(2pi) if norm=True
+    ell : array of int (n)
+        Multipoles range
+    ellvall : array of float (m)
+        Bins pivot range
 
     Example
     ----------
@@ -193,7 +228,7 @@ def GetBinningMatrix(
     >>> print(ellval)
     [ 3.  7.]
     """
-    #### define Stokes
+    # ### define Stokes
     allStoke, der, ind = getstokes(polar, temp, EBTB)
     nder = len(der)
 
@@ -227,45 +262,48 @@ def GetBinningMatrix(
 
     return P, Q, ell, ellval
 
-def GetCorr(F):
-    """
-    ???
 
+def extrapolpixwin(nside, Slmax, pixwining=True):
+    '''
     Parameters
     ----------
-    F : ???
-        ???
-    ...
+    nside : int
+        Healpix map resolution
+    Slmax : int
+        Maximum multipole value computed for the pixel covariance pixel matrix
+    pixwining : bool
+        If True, multiplies the beam window function by the pixel
+        window function. Default: True
 
     Returns
     ----------
-    ??? : ???
-        ???
-    """
-    nbins = len(F)
-    Corr = np.array(
-        [F[i, j] / (F[i, i]*F[j, j])**.5 for i in np.arange(nbins)
-            for j in np.arange(nbins)]).reshape(nbins, nbins)
-    return Corr
+    fpixwin : array of floats
 
-def IsInvertible(F):
-    """
-    ???
-
-    Parameters
+    Example :
     ----------
-    F : ???
-        ???
-    ...
+    >>> print(hp.pixwin(2))
+    [ 1.          0.977303    0.93310702  0.86971852  0.79038278  0.69905215
+      0.60011811  0.49813949  0.39760902]
+    >>> print(extrapolpixwin(2, 20, True))
+    [ 1.          0.977303    0.93310702  0.86971852  0.79038278  0.69905215
+      0.60011811  0.49813949  0.39760902  0.30702636  0.22743277  0.16147253
+      0.10961864  0.07098755  0.04374858  0.02559774  0.01418623  0.00742903
+      0.00366749  0.00170274]
+    >>> print(extrapolpixwin(2, 20, False))
+    [ 1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.
+      1.  1.]
+    '''
+    if pixwining:
+        prepixwin = np.array(hp.pixwin(nside))
+        poly = np.polyfit(np.arange(len(prepixwin)), np.log(prepixwin),
+                          deg=3, w=np.sqrt(prepixwin))
+        y_int = np.polyval(poly, np.arange(Slmax))
+        fpixwin = np.exp(y_int)
+        fpixwin = np.append(prepixwin, fpixwin[len(prepixwin):])[: Slmax]
+    else:
+        fpixwin = np.ones((Slmax))
 
-    Returns
-    ----------
-    ??? : ???
-        ???
-    """
-    eps = np.finfo(F.dtype).eps
-    print("Cond Numb = ", np.linalg.cond(F), "Matrix eps=", eps)
-    return np.linalg.cond(F) > np.finfo(F.dtype).eps
+    return fpixwin
 
 
 if __name__ == "__main__":

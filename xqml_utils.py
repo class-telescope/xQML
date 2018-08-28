@@ -10,21 +10,6 @@ import timeit
 
 import numpy as np
 
-def GetSizeNumpies():
-    """
-    To be copy/past in ipython to get current memory size taken by numpy arrays
-    """
-    import operator
-    np_arrays = {
-        k: v for k, v in locals().items() if isinstance(v, np.ndarray)}
-    np_arrayssize = {
-        key: round((np_arrays[key]).nbytes/1024./1024./1024., 4)
-        for key in np_arrays}
-    sorted_x = sorted(np_arrayssize.items(), key=operator.itemgetter(1))
-    for s in np.arange(len(sorted_x)):
-        print(sorted_x[s])
-    sumx = sum(np.array(sorted_x)[:, 1].astype(np.float))
-    print("total = " + str(sumx)+"Gb")
 
 def ComputeSizeDs_dcb(nside, fsky, deltal=1):
     """
@@ -67,6 +52,7 @@ def get_colors(num_colors):
         saturation = 0.7
         colors.append(colorsys.hls_to_rgb(hue, lightness, saturation))
     return np.array(colors)
+
 
 def progress_bar(i, n, dt):
     """
@@ -132,6 +118,7 @@ def randomword(length):
     """
     return ''.join(rd.choice(string.lowercase) for i in range(length))
 
+
 def cov_from_maps(maps0, maps1):
     """
     ???
@@ -167,3 +154,23 @@ def cov_from_maps(maps0, maps1):
         for j in np.arange(npix):
             covmc[i, j] = np.mean(themaps0[:, i] * themaps1[:, j])
     return(covmc)
+
+
+def IsInvertible(F):
+    """
+    ???
+
+    Parameters
+    ----------
+    F : ???
+        ???
+    ...
+
+    Returns
+    ----------
+    ??? : ???
+        ???
+    """
+    eps = np.finfo(F.dtype).eps
+    print("Cond Numb = ", np.linalg.cond(F), "Matrix eps=", eps)
+    return np.linalg.cond(F) > np.finfo(F.dtype).eps
