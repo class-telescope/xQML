@@ -42,7 +42,7 @@ def Pl(ds_dcb):
     return np.copy(ds_dcb).reshape(2 * (np.shape(ds_dcb)[1]), nnpix, nnpix)
 
 
-def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
+def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, corr=False):
     """
     Compute correlation matrix S = sum_l Pl*Cl
 
@@ -58,7 +58,7 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
         If True, get Stokes parameters for polar (default: True)
     temp : bool
         If True, get Stokes parameters for temperature (default: False)
-    EBTB : bool
+    corr : bool
         If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
@@ -76,7 +76,7 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
     [[   0  280  560  840 1120]
      [1400 1680 1960 2240 2520]]
     """
-    if EBTB:
+    if corr:
         xx = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
         ind = [0, 1, 2, 3, 4, 5]
     else:
@@ -85,7 +85,7 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, EBTB=False):
 
     if not temp:
         allStoke = ['Q', 'U']
-        if EBTB:
+        if corr:
             xx = ['EE', 'BB', 'EB']
             ind = [1, 2, 5]
         else:

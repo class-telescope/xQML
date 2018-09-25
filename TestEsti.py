@@ -3,6 +3,7 @@ Test script for xQML
 
 Author: Vanneste
 """
+
 from __future__ import division
 
 import timeit
@@ -11,107 +12,135 @@ import healpy as hp
 from pylab import *
 import astropy.io.fits as fits
 
-from xqml import xQML
-from libcov import compute_ds_dcb
+import xqml
+import libcov
+import simulation
 from xqml_utils import progress_bar
-from simulation import getstokes, muKarcmin2var, GetBinningMatrix
+from simulation import muKarcmin2var, GetBinningMatrix
 from simulation import extrapolpixwin
+ion()
 
+# if __name__ == "__main__":
+nside = 4
+lmax = 2 * nside - 1
+Slmax = 2 * nside - 1
+deltal = 1
+nsimu = 10000
+clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
+Clthshape = zeros(((6,)+shape(clth)[1:]))
+Clthshape[:4] = clth
+clth = Clthshape
+EB = 0.5
+clth[4] = EB*sqrt(clth[1]*clth[2])
+TB = 0.5
+clth[5] = TB*sqrt(clth[0]*clth[2])
 
-if __name__ == "__main__":
-    nside = 4
-    lmax = 3 * nside - 1
-    Slmax = 3 * nside - 1
-    deltal = 1
-    nsimu = 500
-    clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
-    lth = arange(2, lmax+1)
+lth = arange(2, lmax+1)
+spec = ['EB', 'TE', 'TB']
+temp = True
+polar = True
+corr = False
+pixwin = False
 
-    ellbins = arange(2, lmax + 2, deltal)
-    ellbins[-1] = lmax + 1
+ellbins = arange(2, lmax + 2, deltal)
+ellbins[-1] = lmax + 1
 
-    P, Q, ell, ellval = GetBinningMatrix(ellbins, lmax)
-    nbins = len(ellbins) - 1
+P, Q, ell, ellval = GetBinningMatrix(ellbins, lmax)
+nbins = len(ellbins) - 1
 
-    # Create mask
-    t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
-    mask = np.ones(hp.nside2npix(nside), bool)
-    mask[abs(90 - rad2deg(t)) < 10] = False
-    npix = sum(mask)
+# Create mask
+t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
+mask = np.ones(hp.nside2npix(nside), bool)
+mask[abs(90 - rad2deg(t)) < 60] = False
+npix = sum(mask)
 
-    fwhm = 0.5
-    bl = hp.gauss_beam(deg2rad(fwhm), lmax=Slmax + 1)
+fwhm = 0.5
+bl = hp.gauss_beam(deg2rad(fwhm), lmax=Slmax + 1)
 
-    allStoke, der, ind = getstokes(polar=True, temp=False, EBTB=False)
-    nder = len(der)
+stokes, spec, istokes, ispecs = simulation.getstokes(
+    spec=spec, polar=polar, temp=temp, corr=corr)
+print(stokes, spec, istokes, ispecs)
+nspec = len(spec)
+nstoke = len(stokes)
 
-    muKarcmin = 0.1
+# ############## Compute ds_dcb ###############
+ip = arange(hp.nside2npix(nside))
+ipok = ip[mask]
 
-    pixvar = muKarcmin2var(muKarcmin, nside)
-    varmap = ones((2 * npix)) * pixvar
-    NoiseVar = np.diag(varmap)
+Pl, S = libcov.compute_ds_dcb(ellbins, nside, ipok, bl, clth, Slmax, spec=spec,
+                              pixwin=pixwin, timing=True, MC=False)
 
-    cmb = np.array(hp.synfast(
-        clth, nside, fwhm=deg2rad(fwhm), pixwin=True, new=True, verbose=False))
-    noise = (randn(len(varmap)) * varmap**0.5).reshape(2, -1)
-    # dm = cmb[1:, mask] + noise
-    dm = cmb[1:][:, mask] + noise
+# ############## Compute spectra ###############
 
-    # ############## Compute ds_dcb ###############
-    ip = arange(hp.nside2npix(nside))
-    ipok = ip[mask]
+muKarcmin = 1.0
+pixvar = muKarcmin2var(muKarcmin, nside)
+varmap = ones((nstoke * npix)) * pixvar
+NoiseVar = np.diag(varmap)
 
-    Pl, S = compute_ds_dcb(
-        ellbins, nside, ipok, bl, clth, Slmax,
-        polar=True, temp=False, EBTB=False,
-        pixwining=True, timing=True, MC=False)
-    # Pl = Pl.reshape((nder)*(np.shape(Pl)[1]), 2 * npix, 2 * npix)
+cmb = np.array(hp.synfast(clth, nside, fwhm=deg2rad(fwhm), pixwin=pixwin,
+               new=True, verbose=False, lmax=Slmax))
+noise = (randn(len(varmap)) * varmap**0.5).reshape(nstoke, -1)
+dm = cmb[istokes][:, mask] + noise
 
-    # ############## Compute spectra ###############
-    esti = xQML(mask, ellbins, clth, Pl=Pl, S=S, fwhm=fwhm)
-    esti.construct_esti(NoiseVar, NoiseVar)
-    cl = esti.get_spectra(dm, dm)
-    V = esti.get_covariance()
+esti = xqml.xQML(mask, ellbins, clth, Pl=Pl, S=S, fwhm=fwhm,
+                 spec=spec, temp=temp, polar=polar, corr=corr)
+esti.construct_esti(NoiseVar, NoiseVar)
+cl = esti.get_spectra(dm, dm)
+V = esti.get_covariance()
 
-    # ############## Construct MC ###############
-    allcl = []
-    esti = xQML(mask, ellbins, clth, Pl=Pl, fwhm=fwhm)
-    esti.construct_esti(NoiseVar, NoiseVar)
-    fpixw = extrapolpixwin(nside, lmax+2, pixwining=True)
-    start = timeit.default_timer()
-    for n in np.arange(nsimu):
-        progress_bar(n, nsimu, timeit.default_timer() - start)
-        cmb = np.array(hp.synfast(clth[:, :len(fpixw)]*fpixw**2, nside,
-                       fwhm=deg2rad(fwhm), new=True, verbose=False))
-        dm = cmb[1:, mask] + (randn(2 * npix) * sqrt(varmap)).reshape(2, npix)
-        allcl.append(esti.get_spectra(dm, dm))
+# ############## Construct MC ###############
+allcl = []
+# allcmb = []
+# esti = xqml.xQML(mask, ellbins, clth, Pl=Pl, fwhm=fwhm, spec=spec, temp=temp,
+#                    polar=polar, corr=corr)
+esti.construct_esti(NoiseVar, NoiseVar)
+fpixw = extrapolpixwin(nside, lmax+2, pixwin=pixwin)
+start = timeit.default_timer()
+for n in np.arange(nsimu):
+    progress_bar(n, nsimu, timeit.default_timer() - start)
+    cmb = np.array(hp.synfast(clth[:, :len(fpixw)]*(fpixw*bl)**2, nside,
+                   lmax=Slmax, fwhm=deg2rad(fwhm), new=True, verbose=False))
+    cmbm = cmb[istokes][:, mask]
+    dmA = cmbm + (randn(nstoke * npix) * sqrt(varmap)).reshape(nstoke, npix)
+    dmB = cmbm + (randn(nstoke * npix) * sqrt(varmap)).reshape(nstoke, npix)
+    # allcmb.append(cmbm)
+    allcl.append(esti.get_spectra(dmA, dmB))
 
-    figure()
-    subplot(3, 1, 1)
-    plot(lth, clth.transpose()[lth, 1: 3], '--k')
-    hcl = mean(allcl, 0).transpose()
-    scl = std(allcl, 0).transpose()
-    plot(ellval, hcl, 'b.')
-    plot(ellval, hcl + scl, 'r--', label=r"$\pm 1\sigma$")
-    plot(ellval, hcl - scl, 'r--')
-    ylabel(r"$C_\ell$")
-    semilogy()
-    legend(loc=4)
-    subplot(3, 1, 2)
-    cosmic = sqrt(2./(2 * lth + 1)) / mean(mask) * clth[1: 3, lth]
-    plot(lth, cosmic.transpose(), '--k')
-    plot(ellval, scl, 'r-', label=r"$\sigma_{\rm MC}$")
-    plot(ellval, sqrt(diag(V)).reshape(nder, -1).transpose(), 'b.')
-    ylabel(r"$\sigma(C_\ell)$")
-    semilogy()
-    legend(loc=4)
-    subplot(3, 1, 3)
-    plot(ellval, (hcl-clth[1: 3, lth].T)/(scl/sqrt(nsimu)), 'o')
-    ylabel(r"$R[C_\ell]$")
-    xlabel(r"$\ell$")
-    ylim(-3, 3)
-    show()
+figure(figsize=[10, 8])
+clf()
+subplot(3, 1, 1)
+plot(lth, clth[ispecs][:, lth].T, '--k')
+hcl = mean(allcl, 0)
+scl = std(allcl, 0)
+[plot(ellval, hcl[s], 'o', color='C%i' % s, label=r"$%s$" % spec[s])
+    for s in np.arange(nspec)]
+[fill_between(ellval, (hcl - scl/sqrt(nsimu))[s], (hcl + scl/sqrt(nsimu))[s],
+              color='C%i' % s, alpha=0.2) for s in np.arange(nspec)]
+ylabel(r"$C_\ell$")
+semilogy()
+legend(loc=4)
 
+subplot(3, 1, 2)
+cosmic = sqrt(2./(2 * lth + 1)) / mean(mask) * clth[ispecs][:, lth]
+# plot(lth, cosmic.transpose(), '--k')
+[plot(ellval, scl[s], '--', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
+      spec[s]) for s in np.arange(nspec)]
+[plot(ellval, sqrt(diag(V)).reshape(nspec, -1)[s], 'o', color='C%i' % s)
+    for s in np.arange(nspec)]
+ylabel(r"$\sigma(C_\ell)$")
+semilogy()
+legend(loc=4)
+
+subplot(3, 1, 3)
+[plot(ellval, (hcl[s]-clth[ispecs[s]][lth])/(scl[s]/sqrt(nsimu)), '--o',
+      color='C%i' % s) for s in np.arange(nspec)]
+ylabel(r"$R[C_\ell]$")
+xlabel(r"$\ell$")
+ylim(-3, 3)
+grid()
+show()
+
+# savefig("../Plots/Git/"+"test0.png")
 
 if __name__ == "__main__":
     """

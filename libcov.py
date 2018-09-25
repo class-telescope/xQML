@@ -9,19 +9,20 @@ import timeit
 
 import numpy as np
 import healpy as hp
+import math
+from scipy import special
 
-from spin_functions import dlss, pl0
-from spin_functions import F1l2, F2l2
-from libangles import polrotangle
+# from spin_functions import dlss, pl0
+# from spin_functions import F1l2, F2l2
+# from libangles import polrotangle
 from simulation import getstokes
 from simulation import extrapolpixwin
 from xqml_utils import progress_bar
 
 
 def compute_ds_dcb(
-        ellbins, nside, ipok, bl, clth, Slmax,
-        polar=True, temp=True, EBTB=False,
-        pixwining=False, timing=False, MC=0, Sonly=False):
+        ellbins, nside, ipok, bl, clth, Slmax, spec,
+        pixwin=False, timing=False, MC=0, Sonly=False):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -40,13 +41,9 @@ def compute_ds_dcb(
         Fiducial power spectra
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
-    polar : bool
-        If True, get Stokes parameters for polar. Default: True
-    temp : bool
-        If True, get Stokes parameters for temperature. Default: False
-    EBTB : bool
-        If True, get Stokes parameters for EB and TB. Default: False
-    pixwining : bool
+    spec : 1D array of string
+        Spectra list
+    pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
     timing : bool
@@ -60,54 +57,32 @@ def compute_ds_dcb(
 
     Returns
     ----------
-    dcov : ndarray of floats
+    Pl : ndarray of floats
         Normalize Legendre polynomials dS/dCl
 
-    Smatrix :  2D array of floats
+    S :  2D array of floats
         Pixel signal covariance matrix S
 
     Example
     ----------
     >>> Pl, S = compute_ds_dcb(
     ... np.array([2,4,5,8]), 2, np.array([0,1,4,10,11]), np.arange(10),
-    ... clth=np.arange(30).reshape(3,-1), Slmax=8,
-    ... polar=True, temp=False, EBTB=False,
-    ... pixwining=False, timing=False, MC=0, Sonly=False)
-    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (1158.35868, 38277.82933)
-
-    >>> Pl, S = compute_ds_dcb(
-    ... np.array([2,4,7,8]), 2, np.array([0,3,4,10,11]), np.arange(10),
     ... clth=np.arange(60).reshape(6,-1), Slmax=8,
-    ... polar=True, temp=False, EBTB=True,
-    ... pixwining=True, timing=False, MC=0, Sonly=False)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"],
+    ... pixwin=True, timing=False, MC=0, Sonly=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (570.84071, 15859.29629)
+    (1128.61613, 29501.83265)
 
     >>> Pl, S = compute_ds_dcb(
-    ... np.array([2,4,7,8]), 2, np.array([0,3,4,10,11]), np.arange(10),
+    ... np.array([2,4,5,8]), 2, np.array([0,1,4,10,11]), np.arange(10),
     ... clth=np.arange(60).reshape(6,-1), Slmax=8,
-    ... polar=False, temp=True, EBTB=False,
-    ... pixwining=True, timing=False, MC=0, Sonly=False)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"],
+    ... pixwin=False, timing=False, MC=0, Sonly=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (109.73253, 679.79218)
-
-    >>> import pylab
-    >>> pylab.seed(0)
-    >>> Pl, S = compute_ds_dcb(
-    ... np.array([2,3,4]), 4, np.array([0,1,3]), np.arange(13),
-    ... clth=np.arange(4*13).reshape(4,-1), Slmax=11,
-    ... polar=True, temp=False, EBTB=False,
-    ... pixwining=True, timing=False, MC=100, Sonly=False)
-    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (12.68135, 406990.12056)
-
+    (2590.55388, 65797.6979)
     """
     if Slmax < ellbins[-1]-1:
         print("WARNING : Slmax < lmax")
-
-    allStoke, der, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
-    nder = len(der)
 
     # ### define pixels
     rpix = np.array(hp.pix2vec(nside, ipok))
@@ -117,34 +92,33 @@ def compute_ds_dcb(
 
     if Sonly:
         if MC:
-            Smatrix = S_bins_MC(
+            S = S_bins_MC(
                 ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-                polar=polar, temp=temp, EBTB=EBTB,
-                pixwining=pixwining, timing=timing)
+                polar=polar, temp=temp, corr=corr,
+                pixwin=pixwin, timing=timing)
         else:
-            Smatrix = S_bins_fast(
+            S = compute_S(
                 ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-                polar=polar, temp=temp, EBTB=EBTB,
-                pixwining=pixwining, timing=timing)
-        return Smatrix
+                polar=polar, temp=temp, corr=corr,
+                pixwin=pixwin, timing=timing)
+        return S
 
     if MC:
-        dcov, Smatrix = covth_bins_MC(
+        Pl, S = covth_bins_MC(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-            polar=polar, temp=temp, EBTB=EBTB,
-            pixwining=pixwining, timing=timing)
+            polar=polar, temp=temp, corr=corr,
+            pixwin=pixwin, timing=timing)
     else:
-        dcov, Smatrix = covth_bins_fast(
+        Pl, S = compute_PlS(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-            polar=polar, temp=temp, EBTB=EBTB,
-            pixwining=pixwining, timing=timing)
+            spec=spec, pixwin=pixwin, timing=timing)
 
-    return (dcov, Smatrix)
+    return Pl, S
 
 
-def covth_bins_fast(
+def compute_PlS(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-        polar=True, temp=True, EBTB=False, pixwining=False, timing=False):
+        spec, pixwin=True, timing=False):
     """
     Computes Legendre polynomes Pl = dS/dCb and signal matrix S.
 
@@ -163,13 +137,9 @@ def covth_bins_fast(
         Fiducial power spectra
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
-    polar : bool
-        If True, get Stokes parameters for polar. Default: True
-    temp : bool
-        If True, get Stokes parameters for temperature. Default: False
-    EBTB : bool
-        If True, get Stokes parameters for EB and TB. Default: False
-    pixwining : bool
+    spec : 1D array of string
+        Spectra list
+    pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
     timing : bool
@@ -177,36 +147,28 @@ def covth_bins_fast(
 
     Returns
     ----------
-    dcov : ndarray of floats
+    Pl : ndarray of floats
         Normalize Legendre polynomials dS/dCl
 
-    Smatrix :  2D array of floats
+    S :  2D array of floats
         Pixel signal covariance matrix S
 
     Example
     ----------
-    >>> dcov, S = covth_bins_fast(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
-    ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(4*13).reshape(4,-1), Slmax=11,
-    ... polar=True, temp=False, EBTB=False, pixwining=True, timing=False)
-    >>> print(round(np.sum(dcov),5), round(np.sum(S),5))
-    (-22.04764, -2340.05934)
-
-
-    >>> dcov, S = covth_bins_fast(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+    >>> Pl, S = compute_PlS(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
     ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
-    ... polar=True, temp=False, EBTB=True, pixwining=True, timing=False)
-    >>> print(round(np.sum(dcov),5), round(np.sum(S),5))
-    (56.1748, 8597.38767)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, timing=False)
+    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
+    (14.38023, -4125.5419)
 
 
-    >>> dcov, S = covth_bins_fast(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+    >>> Pl, S = compute_PlS(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(4*13).reshape(4,-1), Slmax=11,
-    ... polar=False, temp=True, EBTB=False, pixwining=True, timing=False)
-    >>> print(round(np.sum(dcov),5), round(np.sum(S),5))
-    (-4.98779, -1270.80223)
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, timing=False)
+    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
+    (17.44139, 3086.13152)
     """
 
     lmax = ellbins[-1]
@@ -216,216 +178,207 @@ def covth_bins_fast(
     maxell = np.array(ellbins[1:nbins+1]) - 1
     ellval = (minell + maxell) * 0.5
 
-    allStoke, der, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
-    nder = len(der)
-    rpix = np.array(hp.pix2vec(nside, ipok))
-    ll = np.arange(Slmax+2)
-    fpixwin = extrapolpixwin(nside, Slmax+2, pixwining)
-    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+2]**2)
+    npi = ipok.size
+    stokes, spec, istokes, ispecs = getstokes(spec)
+    nspec = len(spec)
+    nsto = len(stokes)
+    temp = "TT" in spec
+    polar = "EE" in spec or "BB" in spec
+    TE = 'TE' in spec
+    EB = 'EB' in spec
+    TB = 'TB' in spec
+    te = spec.index('TE') if TE else 0
+    tb = spec.index('TB') if TB else 0
+    eb = spec.index('EB') if EB else 0
+    ponbins = nbins*temp
+    ponpi = npi*temp
+    tenbins = te*nbins
+    tbnbins = tb*nbins
+    ebnbins = eb*nbins
 
-    # ### define masks for ell bin
+    rpix = np.array(hp.pix2vec(nside, ipok))
+    ll = np.arange(Slmax+1)
+    fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
+    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+1]**2)
+    clthn = clth[:, 2: Slmax+1]
+
     masks = []
     for i in np.arange(nbins):
         masks.append((ll[2:] >= minell[i]) & (ll[2:] <= maxell[i]))
     masks = np.array(masks)
 
-    # ## Create array for covariances matrices per bin
-    hm = ipok.size
-    nstokes = np.size(allStoke)
-    newcov = np.zeros((nder*nbins, nstokes*hm, nstokes*hm))
-    Smatrix = np.zeros((nstokes*hm, nstokes*hm))
+    Pl = np.zeros((nspec*nbins, nsto*npi, nsto*npi))
+    S = np.zeros((nsto*npi, nsto*npi))
 
     start = timeit.default_timer()
-    for i in np.arange(hm):
-        if timing:
-            progress_bar(i, hm, -0.5 * (start-timeit.default_timer()))
-        for j in np.arange(i, hm):
-            if temp:
-                pl = pl0(allcosang[i, j], Slmax + 1)[2:]
-                elem = np.sum((norm * pl * clth[0, 2: Slmax + 2])[:-1])
-                Smatrix[i, j] = elem
-                Smatrix[j, i] = elem
-                for b in np.arange(nbins):
-                    elem = np.sum((norm * pl)[masks[b]])
-                    newcov[b, i, j] = elem
-                    newcov[b, j, i] = elem
 
-            elif polar:
+    for i in np.arange(npi):
+        if timing:
+            progress_bar(i, npi, -0.5 * (start-timeit.default_timer()))
+        for j in np.arange(i, npi):
+            if temp:
+                pl = norm*pl0(allcosang[i, j], Slmax)[2:]
+                elem = np.sum((pl * clthn[0]))
+                S[i, j] = elem
+                S[j, i] = elem
+                for b in np.arange(nbins):
+                    elem = np.sum(pl[masks[b]])
+                    Pl[b, i, j] = elem
+                    Pl[b, j, i] = elem
+
+            if polar:
+                ii = i+ponpi
+                jj = j+ponpi
                 cij, sij = polrotangle(rpix[:, i], rpix[:, j])
                 cji, sji = polrotangle(rpix[:, j], rpix[:, i])
                 cos_chi = allcosang[i, j]
 
                 # Tegmark version
-                Q22 = F1l2(cos_chi, Slmax + 1)[2:]
+                Q22 = norm*F1l2(cos_chi, Slmax)[2:]
                 # # /!\ signe - !
-                R22 = -F2l2(cos_chi, Slmax+1)[2:]
+                R22 = -norm*F2l2(cos_chi, Slmax)[2:]
 
-                # Matt version
+                # # Matt version
                 # d20  = dlss(cos_chi, 2,  0, Slmax+1)
                 # d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
                 # d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
-                # P02 = -d20
+                # P02 = -d20[2:]
                 # Q22 = ( d2p2 + d2m2 )[2:]/2.
                 # R22 = ( d2p2 - d2m2 )[2:]/2.
 
-                # EE on QQ
-                elem1 = np.sum((norm * (
-                    cij*cji*Q22 + sij*sji*R22)*(clth[1, 2: Slmax+2]))[: -1])
-                # EE on QU
-                elem2 = np.sum((norm * (
-                    -cij*sji*Q22 + sij*cji*R22)*(clth[1, 2: Slmax+2]))[: -1])
-                # EE on UU
-                elem3 = np.sum((norm * (
-                    sij*sji*Q22 + cij*cji*R22)*(clth[1, 2: Slmax+2]))[: -1])
-                # EE on QU
-                elem4 = np.sum((norm * (
-                    -sij*cji*Q22 + cij*sji*R22)*(clth[1, 2: Slmax+2]))[: -1])
+                if TE or TB:
+                    P02 = -norm*F1l0(cos_chi, Slmax)[2:]
+                    elemA = 0
+                    elemB = 0
+                    elemC = 0
+                    elemD = 0
 
-                # BB on QQ
-                elem3 += np.sum((norm * (
-                    cij*cji*Q22 + sij*sji*R22)*(clth[2, 2: Slmax+2]))[: -1])
-                # BB on QU
-                elem4 -= np.sum((norm * (
-                    -cij*sji*Q22 + sij*cji*R22)*(clth[2, 2: Slmax+2]))[: -1])
-                # BB on UU
-                elem1 += np.sum((norm * (
-                    sij*sji*Q22 + cij*cji*R22)*(clth[2, 2: Slmax+2]))[: -1])
-                # BB on UQ
-                elem2 -= np.sum((norm * (
-                    -sij*cji*Q22 + cij*sji*R22)*(clth[2, 2: Slmax+2]))[: -1])
+                    if TE:
+                        elemTE = P02*clthn[3]
+                        elemA += np.sum(cji*elemTE)
+                        elemB -= np.sum(sji*elemTE)
+                        elemC += np.sum(cij*elemTE)
+                        elemD -= np.sum(sij*elemTE)
 
-                if EBTB:
-                    # EB on all
-                    elem = np.sum(
-                        (norm * (Q22 - R22)*(clth[4, 2: Slmax+2]))[: -1])
-                    # EB on QQ
-                    elem1 += (cji*sij + sji*cij)*elem
-                    # EB on QU
-                    elem2 += (-sji*sij + cji*cij)*elem
-                    # EB on UU
-                    elem3 += (-sji*cij - cji*sij)*elem
-                    # EB on QU
-                    elem4 += (cji*cij - sji*sij)*elem
+                    if TB:
+                        elemTB = P02*clthn[5]
+                        elemA += np.sum(sji*elemTB)
+                        elemB += np.sum(cji*elemTB)
+                        elemC += np.sum(sij*elemTB)
+                        elemD += np.sum(cij*elemTB)
 
-                # to 3
-                Smatrix[i, j] = elem1
-                # to -4
-                Smatrix[i, hm+j] = elem2
-                # to 1
-                Smatrix[hm+i, hm+j] = elem3
-                # to -2
-                Smatrix[hm+i, j] = elem4
+                    S[i, jj] = elemA
+                    S[i, jj+npi] = elemB
+                    S[ii, j] = elemC
+                    S[ii+npi, j] = elemD
 
-                # to 3
-                Smatrix[j, i] = elem1
-                # to -4
-                Smatrix[hm+j, i] = elem2
-                # to 1
-                Smatrix[hm+j, hm+i] = elem3
-                # to -2
-                Smatrix[j, hm+i] = elem4
+                    S[jj, i] = elemA
+                    S[jj+npi, i] = elemB
+                    S[j, ii] = elemC
+                    S[j, ii+npi] = elemD
+
+                elem1 = np.sum((cij*cji*Q22 + sij*sji*R22)*clthn[1])
+                elem2 = np.sum((-cij*sji*Q22 + sij*cji*R22)*clthn[1])
+                elem3 = np.sum((sij*sji*Q22 + cij*cji*R22)*clthn[1])
+                elem4 = np.sum((-sij*cji*Q22 + cij*sji*R22)*clthn[1])
+
+                elem3 += np.sum((cij*cji*Q22 + sij*sji*R22)*clthn[2])
+                elem4 -= np.sum((-cij*sji*Q22 + sij*cji*R22)*clthn[2])
+                elem1 += np.sum((sij*sji*Q22 + cij*cji*R22)*clthn[2])
+                elem2 -= np.sum((-sij*cji*Q22 + cij*sji*R22)*clthn[2])
+
+                if EB:
+                    elemEB = np.sum((Q22 - R22)*clthn[4])
+                    elem1 += (cji*sij + sji*cij)*elemEB
+                    elem2 += (-sji*sij + cji*cij)*elemEB
+                    elem3 += (-sji*cij - cji*sij)*elemEB
+                    elem4 += (cji*cij - sji*sij)*elemEB
+
+                S[ii, jj] = elem1
+                S[ii, jj+npi] = elem2
+                S[ii+npi, jj+npi] = elem3
+                S[ii+npi, jj] = elem4
+
+                S[jj, ii] = elem1
+                S[jj+npi, ii] = elem2
+                S[jj+npi, ii+npi] = elem3
+                S[jj, ii+npi] = elem4
 
                 for b in np.arange(nbins):
-                    # EE or BB on QQ
-                    elem1 = np.sum((norm*(cij*cji*Q22+sij*sji*R22))[masks[b]])
-                    # EE or BB on QU
-                    elem2 = np.sum((norm*(-cij*sji*Q22+sij*cji*R22))[masks[b]])
-                    # EE or BB on UU
-                    elem3 = np.sum((norm*(sij*sji*Q22+cij*cji*R22))[masks[b]])
-                    # EE or BB on UQ
-                    elem4 = np.sum((norm*(-sij*cji*Q22+cij*sji*R22))[masks[b]])
+                    elem1 = np.sum((cij*cji*Q22+sij*sji*R22)[masks[b]])
+                    elem2 = np.sum((-cij*sji*Q22+sij*cji*R22)[masks[b]])
+                    elem3 = np.sum((sij*sji*Q22+cij*cji*R22)[masks[b]])
+                    elem4 = np.sum((-sij*cji*Q22+cij*sji*R22)[masks[b]])
 
                     # # EE ij then ji
-                    # to 3 for BB
-                    newcov[temp*nbins + b, i, j] = elem1
-                    # to -4
-                    newcov[temp*nbins + b, i, hm+j] = elem2
-                    # to 1
-                    newcov[temp*nbins + b, hm+i, hm+j] = elem3
-                    # to -2
-                    newcov[temp*nbins + b, hm+i, j] = elem4
+                    Pl[ponbins + b, ii, jj] = elem1
+                    Pl[ponbins + b, ii, jj+npi] = elem2
+                    Pl[ponbins + b, ii+npi, jj+npi] = elem3
+                    Pl[ponbins + b, ii+npi, jj] = elem4
 
-                    # to 3
-                    newcov[temp*nbins + b, j, i] = elem1
-                    # to -4
-                    newcov[temp*nbins + b, hm+j, i] = elem2
-                    # to 1
-                    newcov[temp*nbins + b, hm+j, hm+i] = elem3
-                    # to -2
-                    newcov[temp*nbins + b, j, hm+i] = elem4
+                    Pl[ponbins + b, jj, ii] = elem1
+                    Pl[ponbins + b, jj+npi, ii] = elem2
+                    Pl[ponbins + b, jj+npi, ii+npi] = elem3
+                    Pl[ponbins + b, jj, ii+npi] = elem4
 
                     # # BB ij then ji
-                    newcov[temp*nbins + nbins+b, hm+i, hm+j] = elem1
-                    newcov[temp*nbins + nbins+b, hm+i, j] = -elem2
-                    newcov[temp*nbins + nbins+b, i, j] = elem3
-                    newcov[temp*nbins + nbins+b, i, hm+j] = -elem4
+                    Pl[ponbins + nbins+b, ii+npi, jj+npi] = elem1
+                    Pl[ponbins + nbins+b, ii+npi, jj] = -elem2
+                    Pl[ponbins + nbins+b, ii, jj] = elem3
+                    Pl[ponbins + nbins+b, ii, jj+npi] = -elem4
 
-                    newcov[temp*nbins + nbins+b, hm+j, hm+i] = elem1
-                    newcov[temp*nbins + nbins+b, j, hm+i] = -elem2
-                    newcov[temp*nbins + nbins+b, j, i] = elem3
-                    newcov[temp*nbins + nbins+b, hm+j, i] = -elem4
+                    Pl[ponbins + nbins+b, jj+npi, ii+npi] = elem1
+                    Pl[ponbins + nbins+b, jj, ii+npi] = -elem2
+                    Pl[ponbins + nbins+b, jj, ii] = elem3
+                    Pl[ponbins + nbins+b, jj+npi, ii] = -elem4
 
-                    # # EB ij then ji
-                    if EBTB:
-                        # on QQ
-                        newcov[2*nbins+b, i, j] = -elem2-elem4
-                        # on QU
-                        newcov[2*nbins+b, i, hm+j] = elem1-elem3
-                        # on UU
-                        newcov[2*nbins+b, hm+i, hm+j] = elem2+elem4
-                        # on UQ
-                        newcov[2*nbins+b, hm+i, j] = elem1-elem3
+                    if TE or TB:
+                        elemA = np.sum(cji*P02[masks[b]])
+                        elemB = np.sum(sji*P02[masks[b]])
+                        elemC = np.sum(cij*P02[masks[b]])
+                        elemD = np.sum(sij*P02[masks[b]])
 
-                        newcov[2*nbins+b, j, i] = -elem2-elem4
-                        newcov[2*nbins+b, hm+j, i] = elem1-elem3
-                        newcov[2*nbins+b, hm+j, hm+i] = elem2+elem4
-                        newcov[2*nbins+b, j, hm+i] = elem1-elem3
+                        if TE:
+                            Pl[tenbins + b, i, jj] = elemA
+                            Pl[tenbins + b, i, jj+npi] = -elemB
+                            Pl[tenbins + b, ii, j] = elemC
+                            Pl[tenbins + b, ii+npi, j] = -elemD
 
-                        # EB on all
-                        elemQ22 = np.sum((norm * (Q22))[masks[b]])
-                        # EB on all
-                        elemR22 = np.sum((norm * (-R22))[masks[b]])
-                        # on QQ
-                        newcov[2*nbins+b, i, j] = (
-                            sij*cji*(elemR22+elemQ22) +
-                            cij*sji*(elemQ22+elemR22))
-                        # on QU
-                        newcov[2*nbins+b, i, hm+j] = (
-                            -sij*sji*(elemR22+elemQ22) +
-                            cij*cji*(elemQ22+elemR22))
-                        # on UU
-                        newcov[2*nbins+b, hm+i, hm+j] = (
-                            -cij*sji*(elemR22+elemQ22) -
-                            sij*cji*(elemQ22+elemR22))
-                        # on UQ
-                        newcov[2*nbins+b, hm+i, j] = (
-                            cij*cji*(elemR22+elemQ22) -
-                            sij*sji*(elemQ22+elemR22))
-                        # to 3
-                        newcov[2*nbins+b, j, i] = (
-                            sij*cji*(elemR22+elemQ22) +
-                            cij*sji*(elemQ22+elemR22))
-                        # to -4
-                        newcov[2*nbins+b, hm+j, i] = (
-                            -sij*sji*(elemR22+elemQ22) +
-                            cij*cji*(elemQ22+elemR22))
-                        # to 1
-                        newcov[2*nbins+b, hm+j, hm+i] = (
-                            -cij*sji*(elemR22+elemQ22) -
-                            sij*cji*(elemQ22+elemR22))
-                        # to -2
-                        newcov[2*nbins+b, j, hm+i] = (
-                            cij*cji*(elemR22+elemQ22) -
-                            sij*sji*(elemQ22+elemR22))
+                            Pl[tenbins + b, jj, i] = elemA
+                            Pl[tenbins + b, jj+npi, i] = -elemB
+                            Pl[tenbins + b, j, ii] = elemC
+                            Pl[tenbins + b, j, ii+npi] = -elemD
 
-    return (newcov, Smatrix)
+                        if TB:
+                            Pl[tbnbins + b, i, jj] = elemB
+                            Pl[tbnbins + b, i, jj+npi] = elemA
+                            Pl[tbnbins + b, ii, j] = elemD
+                            Pl[tbnbins + b, ii+npi, j] = elemC
+
+                            Pl[tbnbins + b, jj, i] = elemB
+                            Pl[tbnbins + b, jj+npi, i] = elemA
+                            Pl[tbnbins + b, j, ii] = elemD
+                            Pl[tbnbins + b, j, ii+npi] = elemC
+
+                    if EB:
+                        Pl[ebnbins+b, ii, jj] = -elem2-elem4
+                        Pl[ebnbins+b, ii, jj+npi] = elem1-elem3
+                        Pl[ebnbins+b, ii+npi, jj+npi] = elem2+elem4
+                        Pl[ebnbins+b, ii+npi, jj] = elem1-elem3
+
+                        Pl[ebnbins+b, jj, ii] = -elem2-elem4
+                        Pl[ebnbins+b, jj+npi, ii] = elem1-elem3
+                        Pl[ebnbins+b, jj+npi, ii+npi] = elem2+elem4
+                        Pl[ebnbins+b, jj, ii+npi] = elem1-elem3
+
+    return Pl, S
 
 
-def S_bins_fast(
+def compute_S(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-        polar=True, temp=True, EBTB=False, pixwining=False, timing=False):
+        spec, pixwin=True, timing=False):
     """
-    Computes pixel covariance signal matrix S.
+    Computes signal matrix S.
 
     Parameters
     ----------
@@ -442,13 +395,9 @@ def S_bins_fast(
         Fiducial power spectra
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
-    polar : bool
-        If True, get Stokes parameters for polar. Default: True
-    temp : bool
-        If True, get Stokes parameters for temperature. Default: False
-    EBTB : bool
-        If True, get Stokes parameters for EB and TB. Default: False
-    pixwining : bool
+    spec : 1D array of string
+        Spectra list
+    pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
     timing : bool
@@ -456,144 +405,157 @@ def S_bins_fast(
 
     Returns
     ----------
-    Smatrix : 2D array of floats
+    S :  2D array of floats
         Pixel signal covariance matrix S
 
     Example
     ----------
-    >>> S = S_bins_fast(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+    >>> S = compute_S(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(4*13).reshape(4,-1), Slmax=11,
-    ... polar=True, temp=False, EBTB=False, pixwining=True, timing=False)
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, timing=False)
     >>> print(round(np.sum(S),5))
-    -2340.05934
+    -4125.5419
 
-    >>> S = S_bins_fast(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+
+    >>> S = compute_S(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(4*13).reshape(4,-1), Slmax=11,
-    ... polar=False, temp=True, EBTB=False, pixwining=True, timing=False)
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, timing=False)
     >>> print(round(np.sum(S),5))
-    -1270.80223
+    3086.13152
     """
 
     lmax = ellbins[-1]
     ell = np.arange(np.min(ellbins), np.max(ellbins) + 1)
     nbins = len(ellbins) - 1
-    minell = np.array(ellbins[0: nbins])
-    maxell = np.array(ellbins[1: nbins + 1]) - 1
+    minell = np.array(ellbins[0:nbins])
+    maxell = np.array(ellbins[1:nbins+1]) - 1
     ellval = (minell + maxell) * 0.5
-    allStoke, spec, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
-    nder = len(spec)
 
-    # define pixels
+    npi = ipok.size
+    stokes, spec, istokes, ispecs = getstokes(spec)
+    nspec = len(spec)
+    nsto = len(stokes)
+    temp = "TT" in spec
+    polar = "EE" in spec or "BB" in spec
+    TE = 'TE' in spec
+    EB = 'EB' in spec
+    TB = 'TB' in spec
+    te = spec.index('TE') if TE else 0
+    tb = spec.index('TB') if TB else 0
+    eb = spec.index('EB') if EB else 0
+    ponbins = nbins*temp
+    ponpi = npi*temp
+    tenbins = te*nbins
+    tbnbins = tb*nbins
+    ebnbins = eb*nbins
+
     rpix = np.array(hp.pix2vec(nside, ipok))
-    # define Pixel window function
-    ll = np.arange(Slmax + 2)
-    fpixwin = extrapolpixwin(nside, Slmax+2, pixwining)
-    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+2]**2)
+    ll = np.arange(Slmax+1)
+    fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
+    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+1]**2)
+    clthn = clth[:, 2: Slmax+1]
+    S = np.zeros((nsto*npi, nsto*npi))
 
-    # ### define masks for ell bins
-    masks = []
-    for i in np.arange(nbins):
-        masks.append((ll[2:] >= minell[i]) & (ll[2:] <= maxell[i]))
-    masks = np.array(masks)
-
-    # ## Create array for covariances matrices per bin
-    hm = ipok.size
-    nstokes = np.size(allStoke)
-    Smatrix = np.zeros((nstokes*hm, nstokes*hm))
-    for i in np.arange(hm):
+    start = timeit.default_timer()
+    for i in np.arange(npi):
         if timing:
-            progress_bar(i, hm, -0.5*(start-timeit.default_timer()))
-        for j in np.arange(i, hm):
-            if nstokes == 1:
-                pl = pl0(allcosang[i, j], Slmax+1)[2:]
-                elem = np.sum((norm*pl*clth[0, 2: Slmax+2])[:-1])
-                Smatrix[i, j] = elem
-                Smatrix[j, i] = elem
-            elif nstokes == 2:
+            progress_bar(i, npi, -0.5 * (start-timeit.default_timer()))
+        for j in np.arange(i, npi):
+            if temp:
+                pl = norm*pl0(allcosang[i, j], Slmax)[2:]
+                elem = np.sum((pl * clthn[0]))
+                S[i, j] = elem
+                S[j, i] = elem
+
+            if polar:
+                ii = i+ponpi
+                jj = j+ponpi
                 cij, sij = polrotangle(rpix[:, i], rpix[:, j])
                 cji, sji = polrotangle(rpix[:, j], rpix[:, i])
                 cos_chi = allcosang[i, j]
 
-                # # # JC version
-                # Q22 =  F1l2(cos_chi,Slmax+1)[2:] #
-                # R22 = -F2l2(cos_chi,Slmax+1)[2:] # # /!\ signe - !
+                # Tegmark version
+                Q22 = norm*F1l2(cos_chi, Slmax)[2:]
+                # # /!\ signe - !
+                R22 = -norm*F2l2(cos_chi, Slmax)[2:]
 
-                # # # Matt version
+                # # Matt version
                 # d20  = dlss(cos_chi, 2,  0, Slmax+1)
-                d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
-                d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
-                # # # P02 = -d20
-                Q22 = (d2p2 + d2m2)[2:] / 2.0
-                R22 = (d2p2 - d2m2)[2:] / 2.0
+                # d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
+                # d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
+                # P02 = -d20[2:]
+                # Q22 = ( d2p2 + d2m2 )[2:]/2.
+                # R22 = ( d2p2 - d2m2 )[2:]/2.
 
-                # EE on QQ
-                elem1 = np.sum((norm * (
-                    cij*cji*Q22 + sij*sji*R22)*(clth[1, 2: Slmax+2]))[: -1])
-                # EE on QU
-                elem2 = np.sum((norm * (
-                    -cij*sji*Q22 + sij*cji*R22)*(clth[1, 2: Slmax+2]))[:-1])
-                # EE on UU
-                elem3 = np.sum((norm * (
-                    sij*sji*Q22 + cij*cji*R22)*(clth[1, 2: Slmax+2]))[:-1])
-                # EE on QU
-                elem4 = np.sum((norm * (
-                    -sij*cji*Q22 + cij*sji*R22)*(clth[1, 2: Slmax+2]))[:-1])
+                if TE or TB:
+                    P02 = -norm*F1l0(cos_chi, Slmax)[2:]
+                    elemA = 0
+                    elemB = 0
+                    elemC = 0
+                    elemD = 0
 
-                # BB on QQ
-                elem3 += np.sum((norm * (
-                    cij*cji*Q22 + sij*sji*R22)*(clth[2, 2: Slmax+2]))[:-1])
-                # BB on QU
-                elem4 -= np.sum((norm * (
-                    -cij*sji*Q22 + sij*cji*R22)*(clth[2, 2: Slmax+2]))[:-1])
-                # BB on UU
-                elem1 += np.sum((norm * (
-                    sij*sji*Q22 + cij*cji*R22)*(clth[2, 2: Slmax+2]))[:-1])
-                # BB on UQ
-                elem2 -= np.sum((norm * (
-                    -sij*cji*Q22 + cij*sji*R22)*(clth[2, 2: Slmax+2]))[:-1])
+                    if TE:
+                        elemTE = P02*clthn[3]
+                        elemA += np.sum(cji*elemTE)
+                        elemB -= np.sum(sji*elemTE)
+                        elemC += np.sum(cij*elemTE)
+                        elemD -= np.sum(sij*elemTE)
 
-                if EBTB:
-                    # EB on all
-                    elem = np.sum((
-                        norm * (Q22 - R22)*(clth[4, 2: Slmax+2]))[:-1])
-                    # EB on QQ
-                    elem1 += (cji*sij + sji*cij)*elem
-                    # EB on QU
-                    elem2 += (-sji*sij + cji*cij)*elem
-                    # EB on UU
-                    elem3 += (-sji*cij - cji*sij)*elem
-                    # EB on QU
-                    elem4 += (cji*cij - sji*sij)*elem
+                    if TB:
+                        elemTB = P02*clthn[5]
+                        elemA += np.sum(sji*elemTB)
+                        elemB += np.sum(cji*elemTB)
+                        elemC += np.sum(sij*elemTB)
+                        elemD += np.sum(cij*elemTB)
 
-                # to 3
-                Smatrix[i, j] = elem1
-                # to -4
-                Smatrix[i, hm+j] = elem2
-                # to 1
-                Smatrix[hm+i, hm+j] = elem3
-                # to -2
-                Smatrix[hm+i, j] = elem4
+                    S[i, jj] = elemA
+                    S[i, jj+npi] = elemB
+                    S[ii, j] = elemC
+                    S[ii+npi, j] = elemD
 
-                # to 3
-                Smatrix[j, i] = elem1
-                # to -4
-                Smatrix[hm+j, i] = elem2
-                # to 1
-                Smatrix[hm+j, hm+i] = elem3
-                # to -2
-                Smatrix[j, hm+i] = elem4
+                    S[jj, i] = elemA
+                    S[jj+npi, i] = elemB
+                    S[j, ii] = elemC
+                    S[j, ii+npi] = elemD
 
-    return (Smatrix)
+                elem1 = np.sum((cij*cji*Q22 + sij*sji*R22)*clthn[1])
+                elem2 = np.sum((-cij*sji*Q22 + sij*cji*R22)*clthn[1])
+                elem3 = np.sum((sij*sji*Q22 + cij*cji*R22)*clthn[1])
+                elem4 = np.sum((-sij*cji*Q22 + cij*sji*R22)*clthn[1])
+
+                elem3 += np.sum((cij*cji*Q22 + sij*sji*R22)*clthn[2])
+                elem4 -= np.sum((-cij*sji*Q22 + sij*cji*R22)*clthn[2])
+                elem1 += np.sum((sij*sji*Q22 + cij*cji*R22)*clthn[2])
+                elem2 -= np.sum((-sij*cji*Q22 + cij*sji*R22)*clthn[2])
+
+                if EB:
+                    elemEB = np.sum((Q22 - R22)*clthn[4])
+                    elem1 += (cji*sij + sji*cij)*elemEB
+                    elem2 += (-sji*sij + cji*cij)*elemEB
+                    elem3 += (-sji*cij - cji*sij)*elemEB
+                    elem4 += (cji*cij - sji*sij)*elemEB
+
+                S[ii, jj] = elem1
+                S[ii, jj+npi] = elem2
+                S[ii+npi, jj+npi] = elem3
+                S[ii+npi, jj] = elem4
+
+                S[jj, ii] = elem1
+                S[jj+npi, ii] = elem2
+                S[jj+npi, ii+npi] = elem3
+                S[jj, ii+npi] = elem4
+
+    return S
 
 
 def covth_bins_MC(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        polar=True, temp=False, EBTB=False, pixwining=False, timing=False):
+        spec, pixwin=False, timing=False):
     """
-    Can be particularly slow on sl7 !
-    To be enhanced and extended to TT and EB
+    Can be particularly slow on sl7.
+    To be enhanced and extended to TT and correlations.
 
     Parameters
     ----------
@@ -610,13 +572,9 @@ def covth_bins_MC(
         Fiducial power spectra
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
-    polar : bool
-        If True, get Stokes parameters for polar. Default: True
-    temp : bool
-        If True, get Stokes parameters for temperature. Default: False
-    EBTB : bool
-        If True, get Stokes parameters for EB and TB. Default: False
-    pixwining : bool
+    spec : 1D array of string
+        Spectra list
+    pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
     timing : bool
@@ -624,7 +582,7 @@ def covth_bins_MC(
 
     Returns
     ----------
-    dcov : ndarray of floats
+    Pl : ndarray of floats
         Normalize Legendre polynomials dS/dCl
 
     S : 2D square matrix array of floats
@@ -634,20 +592,20 @@ def covth_bins_MC(
     ----------
     >>> import pylab
     >>> pylab.seed(0)
-    >>> dcov, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
+    >>> Pl, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,13), bl=np.arange(13),
     ... clth=np.arange(4*13).reshape(4,-1), Slmax=11, nsimu=100,
-    ... polar=True, temp=False, EBTB=False, pixwining=True, timing=False)
-    >>> print(round(np.sum(dcov),5), round(np.sum(S),5))
+    ... polar=True, temp=False, corr=False, pixwin=True, timing=False)
+    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (12.68135, 406990.12056)
 
     >>> import pylab
     >>> pylab.seed(0)
-    >>> dcov, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
+    >>> Pl, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,13), bl=np.arange(13),
     ... clth=np.arange(4*13).reshape(4,-1), Slmax=11, nsimu=100,
-    ... polar=False, temp=True, EBTB=False, pixwining=True, timing=False)
-    >>> print(round(np.sum(dcov),5), round(np.sum(S),5))
+    ... polar=False, temp=True, corr=False, pixwin=True, timing=False)
+    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (42.35592, 7414.01784)
     """
     if nsimu == 1:
@@ -660,10 +618,10 @@ def covth_bins_MC(
     maxell = np.array(ellbins[1: nbins + 1]) - 1
     ellval = (minell + maxell) * 0.5
 
-    allStoke, der, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
-    nder = len(der)
+    Stokes, spec, ind = getstokes(polar=polar, temp=temp, corr=corr)
+    nspec = len(spec)
     ll = np.arange(Slmax+2)
-    fpixwin = extrapolpixwin(nside, Slmax+2, pixwining)
+    fpixwin = extrapolpixwin(nside, Slmax+2, pixwin)
     masks = []
     for i in np.arange(nbins):
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
@@ -673,10 +631,10 @@ def covth_bins_MC(
     norm = bl[0: Slmax + 2]**2 * fpixwin[0: Slmax + 2]**2
 
     if polar:
-        ClthOne = np.zeros((nder * (nbins), 6, (Slmax + 2)))
+        ClthOne = np.zeros((nspec * (nbins), 6, (Slmax + 2)))
         for l in np.arange(2 * nbins):
             ClthOne[l, int(l / nbins + 1)] = masks[l % nbins] * norm
-        if EBTB:
+        if corr:
             print("not implemented")
             # break;
             for l in np.arange(2 * nbins, 3 * nbins):
@@ -684,11 +642,11 @@ def covth_bins_MC(
                 ClthOne[l, 2] = masks[l % nbins] * norm
                 ClthOne[l, 4] = masks[l % nbins] * norm
 
-        dcov = np.zeros((nder * (nbins), 2 * npix, 2 * npix))
+        Pl = np.zeros((nspec * (nbins), 2 * npix, 2 * npix))
         start = timeit.default_timer()
-        for l in np.arange((nder * nbins)):
+        for l in np.arange((nspec * nbins)):
             if timing:
-                progress_bar(l, nder * (nbins),
+                progress_bar(l, nspec * (nbins),
                              -(start - timeit.default_timer()))
 
             data = [
@@ -697,10 +655,10 @@ def covth_bins_MC(
                         ClthOne[l], nside, lmax=Slmax, new=True, verbose=False)
                     )[1: 3, ipok].flatten() for s in np.arange(nsimu)]
 
-            dcov[l] = np.cov(
+            Pl[l] = np.cov(
                 np.array(data).reshape(nsimu, 2 * npix), rowvar=False)
 
-        dcov = dcov.reshape(nder, nbins, 2 * npix, 2 * npix)
+        Pl = Pl.reshape(nspec, nbins, 2 * npix, 2 * npix)
         S = np.cov(
             np.array([
                 np.array(
@@ -717,12 +675,12 @@ def covth_bins_MC(
         ClthOne = np.zeros((nbins, (Slmax + 2)))
         for l in np.arange((nbins)):
             ClthOne[l] = masks[l] * norm
-        dcov = np.zeros(((nbins), npix, npix))
+        Pl = np.zeros(((nbins), npix, npix))
         for l in np.arange((nbins)):
             if timing:
-                progress_bar(l, nder * (nbins),
+                progress_bar(l, nspec * (nbins),
                              -(start - timeit.default_timer()))
-            dcov[l] = np.cov(
+            Pl[l] = np.cov(
                 np.array([
                     hp.synfast(
                         ClthOne[l],
@@ -732,7 +690,7 @@ def covth_bins_MC(
                         )[ipok] for s in np.arange(nsimu)]).reshape(
                             nsimu, npix), rowvar=False)
 
-        dcov = dcov.reshape(1, nbins, npix, npix)
+        Pl = Pl.reshape(1, nbins, npix, npix)
         S = np.cov(
             np.array([
                 np.array(
@@ -746,15 +704,15 @@ def covth_bins_MC(
                         nsimu, npix), rowvar=False)
 
     stop = timeit.default_timer()
-    return (dcov, S)
+    return (Pl, S)
 
 
 def S_bins_MC(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        polar=True, temp=True, EBTB=False, pixwining=False, timing=False):
+        polar=True, temp=True, corr=False, pixwin=False, timing=False):
     """
     Can be particularly slow on sl7 !
-    In developpement to TT and EB
+    To be enhanced and extended to TT and correlations
 
     Parameters
     ----------
@@ -775,9 +733,9 @@ def S_bins_MC(
         If True, get Stokes parameters for polar. Default: True
     temp : bool
         If True, get Stokes parameters for temperature. Default: False
-    EBTB : bool
+    corr : bool
         If True, get Stokes parameters for EB and TB. Default: False
-    pixwining : bool
+    pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
     timing : bool
@@ -797,10 +755,10 @@ def S_bins_MC(
     minell = np.array(ellbins[0: nbins])
     maxell = np.array(ellbins[1: nbins + 1]) - 1
     ellval = (minell + maxell) * 0.5
-    allStoke, der, ind = getstokes(polar=polar, temp=temp, EBTB=EBTB)
-    nder = len(der)
+    Stokes, spec, ind = getstokes(polar=polar, temp=temp, corr=corr)
+    nspec = len(spec)
     ll = np.arange(Slmax + 2)
-    fpixwin = extrapolpixwin(nside, Slmax+2, pixwining)
+    fpixwin = extrapolpixwin(nside, Slmax+2, pixwin)
     masks = []
     for i in np.arange(nbins):
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
@@ -810,10 +768,10 @@ def S_bins_MC(
     norm = bl[0: Slmax + 2]**2 * fpixwin[0: Slmax + 2]**2
 
     if polar:
-        ClthOne = np.zeros((nder * (nbins), 6, (Slmax + 2)))
+        ClthOne = np.zeros((nspec * (nbins), 6, (Slmax + 2)))
         for l in np.arange(2 * nbins):
             ClthOne[l, l / nbins + 1] = masks[l % nbins] * norm
-        if EBTB:
+        if corr:
             print("not implemented")
             # break;
             for l in np.arange(2*nbins, 3*nbins):
@@ -849,6 +807,327 @@ def S_bins_MC(
             rowvar=False)
 
     return S
+
+
+def polrotangle(ri, rj):
+    """
+    Computes cosine and sine of twice the angle between pixels i and j.
+
+    Parameters
+    ----------
+    ri : 3D array of floats
+        Coordinates of vector corresponding to input pixels i following
+        healpy.pix2vec(nside,ipix) output
+    rj : 3D array of floats
+        Coordinates of vector corresponding to input pixels j following
+        healpy.pix2vec(nside,jpix) output
+
+    Returns
+    ----------
+    cos2a : 1D array of floats
+        Cosine of twice the angle between pixels i and j
+    sin2a : 1D array of floats
+        Sine of twice the angle between pixels i and j
+
+    Example
+    ----------
+    >>> cos2a, sin2a = polrotangle([0.1,0.2,0.3], [0.4,0.5,0.6])
+    >>> print(round(cos2a,5),round(sin2a,5))
+    (0.06667, 0.37333)
+    """
+    z = np.array([0.0, 0.0, 1.0])
+
+    # Compute ri^rj : unit vector for the great circle connecting i and j
+    rij = np.cross(ri, rj)
+    norm = np.sqrt(np.dot(rij, np.transpose(rij)))
+
+    # case where pixels are identical or diametrically opposed on the sky
+    if norm <= 1e-15:
+        cos2a = 1.0
+        sin2a = 0.0
+        return cos2a, sin2a
+    rij = rij / norm
+
+    # Compute z^ri : unit vector for the meridian passing through pixel i
+    ris = np.cross(z, ri)
+    norm = np.sqrt(np.dot(ris, np.transpose(ris)))
+
+    # case where pixels is at the pole
+    if norm <= 1e-15:
+        cos2a = 1.0
+        sin2a = 0.0
+        return cos2a, sin2a
+    ris = ris / norm
+
+    # Now, the angle we want is that
+    # between these two great circles: defined by
+    cosa = np.dot(rij, np.transpose(ris))
+
+    # the sign is more subtle : see tegmark et de oliveira costa 2000 eq. A6
+    rijris = np.cross(rij, ris)
+    sina = np.dot(rijris, np.transpose(ri))
+
+    # so now we have directly cos2a and sin2a
+    cos2a = 2.0 * cosa * cosa - 1.0
+    sin2a = 2.0 * cosa * sina
+
+    return cos2a, sin2a
+
+
+def dlss(z, s1, s2, lmax):
+    """
+    Computes the reduced Wigner D-function d^l_ss'
+
+    Parameters
+    ----------
+    z : float
+        Cosine of the angle between two pixels
+    s1 : int
+        Spin number 1
+    s2 : int
+        Spin number 2
+    lmax : int
+        Maximum multipole
+
+    Returns
+    ----------
+    d : 1D array of floats
+        ???
+
+    Example
+    ----------
+    >>> d = dlss(0.1, 2,  2, 5)
+    >>> print(round(sum(d),5))
+    0.24351
+    """
+    d = np.zeros((lmax + 1))
+    if s1 < abs(s2):
+        print("error spins, s1<|s2|")
+        return
+
+    # Conv: sign = -1 if (s1 + s2) and 1 else 1
+    sign = (-1)**(s1 - s2)
+    fs1 = math.factorial(2.0 * s1)
+    fs1ps2 = math.factorial(1.0 * s1 + s2)
+    fs1ms2 = math.factorial(1.0 * s1 - s2)
+    num = (1.0 + z)**(0.5 * (s1 + s2)) * (1.0 - z)**(0.5 * (s1 - s2))
+
+    # Initialise the recursion (l = s1 + 1)
+    d[s1] = sign / 2.0**s1 * np.sqrt(fs1 / fs1ps2 / fs1ms2) * num
+
+    l1 = s1 + 1.0
+    rhoSSL1 = np.sqrt((l1 * l1 - s1 * s1) * (l1 * l1 - s2 * s2)) / l1
+    d[s1+1] = (2 * s1 + 1.0)*(z - s2 / (s1 + 1.0)) * d[s1] / rhoSSL1
+
+    # Build the recursion for l > s1 + 1
+    for l in np.arange(s1 + 1, lmax, 1):
+        l1 = l + 1.0
+        numSSL = (l * l * 1.0 - s1 * s1) * (l * l * 1.0 - s2 * s2)
+        rhoSSL = np.sqrt(numSSL) / (l * 1.0)
+        numSSL1 = (l1 * l1 - s1 * s1) * (l1 * l1 - s2 * s2)
+        rhoSSL1 = np.sqrt(numSSL1) / l1
+
+        numd = (2.0 * l + 1.0) * (z - s1 * s2 / (l * 1.0) / l1) * d[l]
+        d[l+1] = (numd - rhoSSL * d[l-1]) / rhoSSL1
+    return d
+
+
+def pl0(z, lmax):
+    """
+    Computes the associated Legendre function of the first kind of order 0
+    Pn(z) from 0 to lmax (inclusive).
+
+    Parameters
+    ----------
+    z : float
+        Cosine of the angle between two pixels
+    lmax : int
+        Maximum multipole
+
+    Returns
+    ----------
+    Pn : 1D array of floats
+    Legendre function
+
+    Example
+    ----------
+    >>> thepl0 = pl0(0.1, 5)
+    >>> print(round(sum(thepl0),5))
+    0.98427
+    """
+    Pn = special.lpn(lmax, z)[0]
+    return Pn
+
+
+def pl2(z, lmax):
+    """
+    Computes the associated Legendre function of the first kind of order 2
+    from 0 to lmax (inclusive)
+
+    Parameters
+    ----------
+    z : float
+        Cosine of the angle between two pixels
+    lmax : int
+        Maximum multipole
+
+    Returns
+    ----------
+    Pn2 : 1D array of floats
+    Legendre function
+
+    Example
+    ----------
+    >>> thepl2 = pl2(0.1, 5)
+    >>> print(round(sum(thepl2),5))
+    -7.49183
+    """
+    Pn2 = special.lpmn(2, lmax, z)[0][2]
+    return Pn2
+
+
+# ####### F1 and F2 functions from Tegmark & De Oliveira-Costa, 2000  #########
+def F1l0(z, lmax):
+    """
+    Compute the F1l0 function from Tegmark & De Oliveira-Costa, 2000
+
+    Parameters
+    ----------
+    z : float
+        Cosine of the angle between two pixels
+    lmax : int
+        Maximum multipole
+
+    Returns
+    ----------
+    bla : 1D array of float
+    F1l0 function from Tegmark & De Oliveira-Costa, 2000
+
+    Example
+    ----------
+    >>> theF1l0= F1l0(0.1, 5)
+    >>> print(round(sum(theF1l0),5))
+    0.20392
+    """
+    if abs(z) == 1.0:
+        return(np.zeros(lmax + 1))
+    else:
+        ell = np.arange(2, lmax + 1)
+        thepl = pl0(z, lmax)
+        theplm1 = np.append(0, thepl[:-1])
+        thepl = thepl[2:]
+        theplm1 = theplm1[2:]
+        a0 = 2.0 / np.sqrt((ell - 1) * ell * (ell + 1) * (ell + 2))
+        a1 = ell * z * theplm1 / (1 - z**2)
+        a2 = (ell / (1 - z**2) + ell * (ell - 1) / 2) * thepl
+        bla = np.append([0, 0], a0 * (a1 - a2))
+        return bla
+
+
+def F1l2(z, lmax):
+    """
+    Compute the F1l2 function from Tegmark & De Oliveira-Costa, 2000
+
+    Parameters
+    ----------
+    z : float
+        Cosine of the angle between two pixels
+    lmax : int
+        Maximum multipole
+
+    Returns
+    ----------
+    bla : 1D array of float
+    F1l2 function from Tegmark & De Oliveira-Costa, 2000
+
+    Example
+    ----------
+    >>> theF1l2= F1l2(0.1, 5)
+    >>> print(round(sum(theF1l2),5))
+    0.58396
+    """
+    if z == 1.0:
+        return np.append(np.zeros(2), np.ones(lmax - 1) * 0.5)
+    elif z == -1.0:
+        ell = np.arange(lmax + 1)
+        return np.append(np.zeros(2), 0.5 * (-1)**ell[2:])
+    else:
+        ell = np.arange(2, lmax + 1)
+        thepl2 = pl2(z, lmax)
+        theplm1_2 = np.append(0, thepl2[:-1])
+        thepl2 = thepl2[2:]
+        theplm1_2 = theplm1_2[2:]
+        a0 = 2.0 / ((ell - 1) * ell * (ell + 1) * (ell + 2))
+        a1 = (ell + 2) * z * theplm1_2 / (1 - z**2)
+        a2 = ((ell - 4) / (1 - z**2) + ell * (ell - 1) / 2) * thepl2
+        bla = np.append([0, 0], a0 * (a1 - a2))
+        return bla
+
+
+def F2l2(z, lmax):
+    """
+    Compute the F2l2 function from Tegmark & De Oliveira-Costa, 2000
+
+    Parameters
+    ----------
+    z : float
+        Cosine of the angle between two pixels
+    lmax : int
+        Maximum multipole
+
+    Returns
+    ----------
+    ???
+
+    Example
+    ----------
+    >>> theF2l2= F2l2(0.1, 5)
+    >>> print(round(sum(theF2l2),5))
+    0.34045
+    """
+    if z == 1.0:
+        return np.append(np.zeros(2), -0.5 * np.ones(lmax - 1))
+    elif z == -1.0:
+        ell = np.arange(lmax + 1)
+        return np.append(np.zeros(2), 0.5 * (-1)**ell[2:])
+    else:
+        ell = np.arange(2, lmax + 1)
+        thepl2 = pl2(z, lmax)
+        theplm1_2 = np.append(0, thepl2[:-1])
+        thepl2 = thepl2[2:]
+        theplm1_2 = theplm1_2[2:]
+        a0 = 4.0 / ((ell - 1) * ell * (ell + 1) * (ell + 2) * (1 - z**2))
+        a1 = (ell + 2) * theplm1_2
+        a2 = (ell - 1) * z * thepl2
+        bla = np.append([0, 0], a0 * (a1 - a2))
+        return bla
+
+
+def dlss(z, s1, s2, lmax):
+    '''
+    Matt version
+    '''
+    d = np.zeros((lmax+1))
+    if s1 < abs(s2):
+        print("error spins, s1<|s2|")
+    return
+    # sign = -1 if (s1 + s2) and 1 else 1
+    sign = (-1)**(s1-s2)
+    d[s1] = sign / 2.**s1 * math.sqrt(math.factorial(2.*s1)/math.factorial(
+        1.*s1 + s2)/math.factorial(1.*s1-s2)) * (1.+z)**(.5*(s1+s2)) * (
+        1.-z)**(.5 * (s1-s2))
+
+    l1 = s1+1.
+    rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
+    d[s1+1] = (2*s1+1.)*(z-s2/(s1+1.)) * d[s1] / rhoSSL1
+    for l in np.arange(s1+1, lmax, 1):
+        l1 = l+1.
+        rhoSSL = math.sqrt((l*l*1. - s1*s1) * (l*l*1. - s2*s2)) / (l*1.)
+        rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
+        d[l+1] = ((2.*l+1.)*(
+            z-s1*s2/(l*1.)/l1)*d[l] - rhoSSL*d[l-1]) / rhoSSL1
+    return d
+
 
 if __name__ == "__main__":
     """

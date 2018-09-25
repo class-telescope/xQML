@@ -1,5 +1,5 @@
 """
-Set of routines to generate basic simulations 
+Set of routines to generate basic simulations
 
 Author: Vanneste
 """
@@ -96,62 +96,81 @@ def getNl(pixvar, nside, nbins):
     return Nl
 
 
-def getstokes(polar=True, temp=False, EBTB=False):
+def getstokes(spec=None, temp=False, polar=False, corr=False):
     """
     Get the Stokes parameters number and name(s)
 
     Parameters
     ----------
+    spec : bool
+        If True, get Stokes parameters for polar (default: True)
     polar : bool
         If True, get Stokes parameters for polar (default: True)
     temp : bool
         If True, get Stokes parameters for temperature (default: False)
-    EBTB : bool
+    corr : bool
         If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
     ----------
-    allStoke : list of string
+    stokes : list of string
         Stokes variables names
     spec : int
         Spectra names
-    ind : list
+    istokes : list
         Indexes of power spectra
 
     Example
     ----------
-    >>> getstokes(polar=True, temp=False, EBTB=False)
+    >>> getstokes(polar=True, temp=False, corr=False)
     (['Q', 'U'], ['EE', 'BB'], [1, 2])
-    >>> getstokes(polar=True, temp=True, EBTB=False)
+    >>> getstokes(polar=True, temp=True, corr=False)
     (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
-    >>> getstokes(polar=True, temp=True, EBTB=True)
+    >>> getstokes(polar=True, temp=True, corr=True)
     (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'EB', 'TB'], [0, 1, 2, 3, 4, 5])
     """
-    allStoke = ['I', 'Q', 'U']
-    if EBTB:
-        spec = ['TT', 'EE', 'BB', 'TE', 'EB', 'TB']
-        ind = [0, 1, 2, 3, 4, 5]
+    if spec is not None:
+        _temp = "TT" in spec or "TE" in spec or "TB" in spec or temp
+        _polar = "EE" in spec or "BB" in spec or "TE" in spec or "TB" in \
+            spec or "EB" in spec or polar
+        _corr = "TE" in spec or "TB" in spec or "EB" in spec or corr
+        if not _temp and not _polar and not _corr:
+            print("invalid spectra list")
     else:
-        spec = ['TT', 'EE', 'BB', 'TE']
-        ind = [0, 1, 2, 3]
-    if not temp:
-        allStoke = ['Q', 'U']
-        if EBTB:
-            spec = ['EE', 'BB', 'EB']
-            ind = [1, 2, 4]
-        else:
-            spec = ['EE', 'BB']
-            ind = [1, 2]
-    if not polar:
-        allStoke = ['I']
-        spec = ['TT']
-        ind = [0]
-    return allStoke, spec, ind
+        _temp = temp
+        _polar = polar
+        _corr = corr
+
+    speclist = []
+    if _temp or (spec is None and corr):
+        speclist.extend(["TT"])
+    if _polar:
+        speclist.extend(["EE", "BB"])
+    if spec is not None and not corr:
+        if 'TE' in spec:
+            speclist.extend(["TE"])
+        if 'EB' in spec:
+            speclist.extend(["EB"])
+        if 'TB' in spec:
+            speclist.extend(["TB"])
+
+    elif _corr:
+        speclist.extend(["TE", "EB", "TB"])
+
+    stokes = []
+    if _temp:
+        stokes.extend(["I"])
+    if _polar:
+        stokes.extend(["Q", "U"])
+
+    ispecs = [['TT', 'EE', 'BB', 'TE', 'EB', 'TB'].index(s) for s in speclist]
+    istokes = [['I', 'Q', 'U'].index(s) for s in stokes]
+    return stokes, speclist, istokes, ispecs
 
 
 def GetBinningMatrix(
         ellbins, lmax, norm=False, polar=True,
-        temp=False, EBTB=False):
+        temp=False, corr=False):
     """
     Return P (m,n) and Q (n,m) binning matrices such that
     Cb = P.Cl and Vbb = P.Vll.Q with m the number of bins and
@@ -171,7 +190,7 @@ def GetBinningMatrix(
         If True, get Stokes parameters for polar (default: True)
     temp : bool
         If True, get Stokes parameters for temperature (default: False)
-    EBTB : bool
+    corr : bool
         If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
@@ -229,8 +248,7 @@ def GetBinningMatrix(
     [ 3.  7.]
     """
     # ### define Stokes
-    allStoke, der, ind = getstokes(polar, temp, EBTB)
-    nder = len(der)
+    nspec = 1
 
     nbins = len(ellbins) - 1
     ellmin = np.array(ellbins[0: nbins])
@@ -248,10 +266,10 @@ def GetBinningMatrix(
     for i in np.arange(nbins):
         masklm.append(((ell[:-1] >= minell[i]) & (ell[:-1] <= maxell[i])))
 
-    allmasklm = nder*[list(masklm)]
+    allmasklm = nspec*[list(masklm)]
     masklM = np.array(sparse.block_diag(allmasklm[:]).toarray())
     binsnorm = np.array(
-        nder * [list(np.arange(minell[0], np.max(ellbins)))]).flatten()
+        nspec * [list(np.arange(minell[0], np.max(ellbins)))]).flatten()
 
     binsnorm = binsnorm*(binsnorm+1)/2./np.pi
     P = np.array(masklM)*1.
@@ -263,7 +281,7 @@ def GetBinningMatrix(
     return P, Q, ell, ellval
 
 
-def extrapolpixwin(nside, Slmax, pixwining=True):
+def extrapolpixwin(nside, Slmax, pixwin=True):
     '''
     Parameters
     ----------
@@ -271,7 +289,7 @@ def extrapolpixwin(nside, Slmax, pixwining=True):
         Healpix map resolution
     Slmax : int
         Maximum multipole value computed for the pixel covariance pixel matrix
-    pixwining : bool
+    pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
 
@@ -293,7 +311,7 @@ def extrapolpixwin(nside, Slmax, pixwining=True):
     [ 1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.
       1.  1.]
     '''
-    if pixwining:
+    if pixwin:
         prepixwin = np.array(hp.pixwin(nside))
         poly = np.polyfit(np.arange(len(prepixwin)), np.log(prepixwin),
                           deg=3, w=np.sqrt(prepixwin))
