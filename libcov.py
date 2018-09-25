@@ -201,7 +201,6 @@ def compute_PlS(
     fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
     norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+1]**2)
     clthn = clth[:, 2: Slmax+1]
-
     masks = []
     for i in np.arange(nbins):
         masks.append((ll[2:] >= minell[i]) & (ll[2:] <= maxell[i]))
@@ -234,38 +233,39 @@ def compute_PlS(
                 cos_chi = allcosang[i, j]
 
                 # Tegmark version
-                Q22 = norm*F1l2(cos_chi, Slmax)[2:]
+                Q22 = norm * F1l2(cos_chi, Slmax)
                 # # /!\ signe - !
-                R22 = -norm*F2l2(cos_chi, Slmax)[2:]
+                R22 = -norm * F2l2(cos_chi, Slmax)
 
                 # # Matt version
-                # d20  = dlss(cos_chi, 2,  0, Slmax+1)
                 # d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
                 # d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
-                # P02 = -d20[2:]
                 # Q22 = ( d2p2 + d2m2 )[2:]/2.
                 # R22 = ( d2p2 - d2m2 )[2:]/2.
 
                 if TE or TB:
-                    P02 = -norm*F1l0(cos_chi, Slmax)[2:]
+                    # # Matt version
+                    # d20 = -dlss(cos_chi, 2,  0, Slmax)[2:]
+                    # P02 = norm * d20
+                    P02 = -norm * F1l0(cos_chi, Slmax)
                     elemA = 0
                     elemB = 0
                     elemC = 0
                     elemD = 0
 
                     if TE:
-                        elemTE = P02*clthn[3]
-                        elemA += np.sum(cji*elemTE)
-                        elemB -= np.sum(sji*elemTE)
-                        elemC += np.sum(cij*elemTE)
-                        elemD -= np.sum(sij*elemTE)
+                        elemTE = np.sum(P02*clthn[3])
+                        elemA += cji*elemTE
+                        elemB -= sji*elemTE
+                        elemC += cij*elemTE
+                        elemD -= sij*elemTE
 
                     if TB:
-                        elemTB = P02*clthn[5]
-                        elemA += np.sum(sji*elemTB)
-                        elemB += np.sum(cji*elemTB)
-                        elemC += np.sum(sij*elemTB)
-                        elemD += np.sum(cij*elemTB)
+                        elemTB = np.sum(P02*clthn[5])
+                        elemA += sji*elemTB
+                        elemB += cji*elemTB
+                        elemC += sij*elemTB
+                        elemD += cij*elemTB
 
                     S[i, jj] = elemA
                     S[i, jj+npi] = elemB
@@ -464,7 +464,7 @@ def compute_S(
             progress_bar(i, npi, -0.5 * (start-timeit.default_timer()))
         for j in np.arange(i, npi):
             if temp:
-                pl = norm*pl0(allcosang[i, j], Slmax)[2:]
+                pl = norm*pl0(allcosang[i, j], Slmax)
                 elem = np.sum((pl * clthn[0]))
                 S[i, j] = elem
                 S[j, i] = elem
@@ -477,9 +477,9 @@ def compute_S(
                 cos_chi = allcosang[i, j]
 
                 # Tegmark version
-                Q22 = norm*F1l2(cos_chi, Slmax)[2:]
+                Q22 = norm*F1l2(cos_chi, Slmax)
                 # # /!\ signe - !
-                R22 = -norm*F2l2(cos_chi, Slmax)[2:]
+                R22 = -norm*F2l2(cos_chi, Slmax)
 
                 # # Matt version
                 # d20  = dlss(cos_chi, 2,  0, Slmax+1)
@@ -490,7 +490,7 @@ def compute_S(
                 # R22 = ( d2p2 - d2m2 )[2:]/2.
 
                 if TE or TB:
-                    P02 = -norm*F1l0(cos_chi, Slmax)[2:]
+                    P02 = -norm*F1l0(cos_chi, Slmax)
                     elemA = 0
                     elemB = 0
                     elemC = 0
@@ -1010,7 +1010,7 @@ def F1l0(z, lmax):
     0.20392
     """
     if abs(z) == 1.0:
-        return(np.zeros(lmax + 1))
+        return(np.zeros(lmax - 1))
     else:
         ell = np.arange(2, lmax + 1)
         thepl = pl0(z, lmax)
@@ -1020,7 +1020,7 @@ def F1l0(z, lmax):
         a0 = 2.0 / np.sqrt((ell - 1) * ell * (ell + 1) * (ell + 2))
         a1 = ell * z * theplm1 / (1 - z**2)
         a2 = (ell / (1 - z**2) + ell * (ell - 1) / 2) * thepl
-        bla = np.append([0, 0], a0 * (a1 - a2))
+        bla = a0 * (a1 - a2)
         return bla
 
 
@@ -1047,10 +1047,10 @@ def F1l2(z, lmax):
     0.58396
     """
     if z == 1.0:
-        return np.append(np.zeros(2), np.ones(lmax - 1) * 0.5)
+        return np.ones(lmax - 1) * 0.5
     elif z == -1.0:
         ell = np.arange(lmax + 1)
-        return np.append(np.zeros(2), 0.5 * (-1)**ell[2:])
+        return 0.5 * (-1)**ell[2:]
     else:
         ell = np.arange(2, lmax + 1)
         thepl2 = pl2(z, lmax)
@@ -1060,7 +1060,7 @@ def F1l2(z, lmax):
         a0 = 2.0 / ((ell - 1) * ell * (ell + 1) * (ell + 2))
         a1 = (ell + 2) * z * theplm1_2 / (1 - z**2)
         a2 = ((ell - 4) / (1 - z**2) + ell * (ell - 1) / 2) * thepl2
-        bla = np.append([0, 0], a0 * (a1 - a2))
+        bla = a0 * (a1 - a2)
         return bla
 
 
@@ -1086,10 +1086,10 @@ def F2l2(z, lmax):
     0.34045
     """
     if z == 1.0:
-        return np.append(np.zeros(2), -0.5 * np.ones(lmax - 1))
+        return -0.5 * np.ones(lmax - 1)
     elif z == -1.0:
         ell = np.arange(lmax + 1)
-        return np.append(np.zeros(2), 0.5 * (-1)**ell[2:])
+        return  0.5 * (-1)**ell[2:]
     else:
         ell = np.arange(2, lmax + 1)
         thepl2 = pl2(z, lmax)
@@ -1099,34 +1099,55 @@ def F2l2(z, lmax):
         a0 = 4.0 / ((ell - 1) * ell * (ell + 1) * (ell + 2) * (1 - z**2))
         a1 = (ell + 2) * theplm1_2
         a2 = (ell - 1) * z * thepl2
-        bla = np.append([0, 0], a0 * (a1 - a2))
+        bla = a0 * (a1 - a2)
         return bla
 
-
 def dlss(z, s1, s2, lmax):
-    '''
-    Matt version
-    '''
-    d = np.zeros((lmax+1))
-    if s1 < abs(s2):
-        print("error spins, s1<|s2|")
+  '''
+  Matt version
+  '''
+  d = np.zeros((lmax+1))
+  if s1 < abs(s2):
+    print("error spins, s1<|s2|")
     return
-    # sign = -1 if (s1 + s2) and 1 else 1
-    sign = (-1)**(s1-s2)
-    d[s1] = sign / 2.**s1 * math.sqrt(math.factorial(2.*s1)/math.factorial(
-        1.*s1 + s2)/math.factorial(1.*s1-s2)) * (1.+z)**(.5*(s1+s2)) * (
-        1.-z)**(.5 * (s1-s2))
+  # sign = -1 if (s1 + s2) and 1 else 1
+  sign = (-1)**(s1-s2)
+  d[s1] = sign / 2.**s1 * math.sqrt(math.factorial(2.*s1)/math.factorial(1.*s1+s2)/math.factorial(1.*s1-s2)) *  (1.+z)**(.5*(s1+s2)) *  (1.-z)**(.5*(s1-s2)) 
 
-    l1 = s1+1.
-    rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
-    d[s1+1] = (2*s1+1.)*(z-s2/(s1+1.)) * d[s1] / rhoSSL1
-    for l in np.arange(s1+1, lmax, 1):
-        l1 = l+1.
-        rhoSSL = math.sqrt((l*l*1. - s1*s1) * (l*l*1. - s2*s2)) / (l*1.)
-        rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
-        d[l+1] = ((2.*l+1.)*(
-            z-s1*s2/(l*1.)/l1)*d[l] - rhoSSL*d[l-1]) / rhoSSL1
-    return d
+  l1 = s1+1.
+  rhoSSL1 = math.sqrt( (l1*l1 - s1*s1) * (l1*l1 - s2*s2) ) / l1
+  d[s1+1] = (2*s1+1.)*(z-s2/(s1+1.)) * d[s1] / rhoSSL1
+  for l in np.arange(s1+1, lmax, 1) : #( l=s1+1; l<lmax; l++) {
+    l1 = l+1.
+    rhoSSL  = math.sqrt( (l*l*1.- s1*s1) * (l*l*1.- s2*s2) ) / (l*1.)
+    rhoSSL1 = math.sqrt( (l1*l1 - s1*s1) * (l1*l1 - s2*s2) ) / l1
+    d[l+1] = ( (2.*l+1.)*(z-s1*s2/(l*1.)/l1)*d[l] - rhoSSL*d[l-1] ) / rhoSSL1
+  return d
+
+# def dlss(z, s1, s2, lmax):
+#     '''
+#     Matt version
+#     '''
+#     d = np.zeros((lmax+1))
+#     if s1 < abs(s2):
+#         print("error spins, s1<|s2|")
+#     return
+#     # sign = -1 if (s1 + s2) and 1 else 1
+#     sign = (-1)**(s1-s2)
+#     d[s1] = sign / 2.**s1 * math.sqrt(math.factorial(2.*s1)/math.factorial(
+#         1.*s1 + s2)/math.factorial(1.*s1-s2)) * (1.+z)**(.5*(s1+s2)) * (
+#         1.-z)**(.5 * (s1-s2))
+
+#     l1 = s1+1.
+#     rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
+#     d[s1+1] = (2*s1+1.)*(z-s2/(s1+1.)) * d[s1] / rhoSSL1
+#     for l in np.arange(s1+1, lmax, 1):
+#         l1 = l+1.
+#         rhoSSL = math.sqrt((l*l*1. - s1*s1) * (l*l*1. - s2*s2)) / (l*1.)
+#         rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
+#         d[l+1] = ((2.*l+1.)*(
+#             z-s1*s2/(l*1.)/l1)*d[l] - rhoSSL*d[l-1]) / rhoSSL1
+#     return d
 
 
 if __name__ == "__main__":

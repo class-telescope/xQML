@@ -336,21 +336,21 @@ def ClQuadEstimator(invW, y):
     return Cl
 
 
-# def biasQuadEstimator(NoiseN, El):
-#     """
-#     Compute bias term bl such that Cl = Fll^-1 . ( yl + bias)
+def biasQuadEstimator(NoiseN, El):
+    """
+    Compute bias term bl such that Cl = Fll^-1 . ( yl + bias)
 
-#     Parameters
-#     ----------
-#     NoiseN : ???
-#         ???
+    Parameters
+    ----------
+    NoiseN : ???
+        ???
 
-#     Returns
-#     ----------
-#     ???
-#     """
-#     lrange = np.arange((len(El)))
-#     return np.array([np.sum(NoiseN * El[l]) for l in lrange])
+    Returns
+    ----------
+    ???
+    """
+    lrange = np.arange((len(El)))
+    return np.array([np.sum(NoiseN * El[l]) for l in lrange])
 
 
 # def blEstimatorFlat(NoiseN, El):

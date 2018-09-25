@@ -25,22 +25,22 @@ nside = 4
 lmax = 2 * nside - 1
 Slmax = 2 * nside - 1
 deltal = 1
-nsimu = 10000
+nsimu = 1000
 clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
 Clthshape = zeros(((6,)+shape(clth)[1:]))
 Clthshape[:4] = clth
 clth = Clthshape
-EB = 0.5
+EB = 0.1
 clth[4] = EB*sqrt(clth[1]*clth[2])
-TB = 0.5
+TB = 0.0
 clth[5] = TB*sqrt(clth[0]*clth[2])
 
 lth = arange(2, lmax+1)
-spec = ['EB', 'TE', 'TB']
+spec = None #['EB']
 temp = True
-polar = True
+polar = False
 corr = False
-pixwin = False
+pixwin = True
 
 ellbins = arange(2, lmax + 2, deltal)
 ellbins[-1] = lmax + 1
@@ -51,7 +51,7 @@ nbins = len(ellbins) - 1
 # Create mask
 t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
 mask = np.ones(hp.nside2npix(nside), bool)
-mask[abs(90 - rad2deg(t)) < 60] = False
+# mask[abs(90 - rad2deg(t)) < 30] = False
 npix = sum(mask)
 
 fwhm = 0.5
@@ -70,58 +70,67 @@ ipok = ip[mask]
 Pl, S = libcov.compute_ds_dcb(ellbins, nside, ipok, bl, clth, Slmax, spec=spec,
                               pixwin=pixwin, timing=True, MC=False)
 
-# ############## Compute spectra ###############
+# ############## Initialise xqml class ###############
 
 muKarcmin = 1.0
 pixvar = muKarcmin2var(muKarcmin, nside)
 varmap = ones((nstoke * npix)) * pixvar
 NoiseVar = np.diag(varmap)
 
-cmb = np.array(hp.synfast(clth, nside, fwhm=deg2rad(fwhm), pixwin=pixwin,
-               new=True, verbose=False, lmax=Slmax))
 noise = (randn(len(varmap)) * varmap**0.5).reshape(nstoke, -1)
-dm = cmb[istokes][:, mask] + noise
-
-esti = xqml.xQML(mask, ellbins, clth, Pl=Pl, S=S, fwhm=fwhm,
-                 spec=spec, temp=temp, polar=polar, corr=corr)
-esti.construct_esti(NoiseVar, NoiseVar)
-cl = esti.get_spectra(dm, dm)
-V = esti.get_covariance()
+esti = xqml.xQML(mask, ellbins, clth, NA=NoiseVar, NB=NoiseVar, Pl=Pl,
+                 S=S, fwhm=fwhm, spec=spec, temp=temp, polar=polar, corr=corr)
+# esti.construct_esti(NoiseVar, NoiseVar)
+V = esti.get_covariance(cross=True)
+Va = esti.get_covariance(cross=False)
 
 # ############## Construct MC ###############
+
+allcla = []
 allcl = []
 # allcmb = []
-# esti = xqml.xQML(mask, ellbins, clth, Pl=Pl, fwhm=fwhm, spec=spec, temp=temp,
-#                    polar=polar, corr=corr)
 esti.construct_esti(NoiseVar, NoiseVar)
 fpixw = extrapolpixwin(nside, lmax+2, pixwin=pixwin)
 start = timeit.default_timer()
 for n in np.arange(nsimu):
     progress_bar(n, nsimu, timeit.default_timer() - start)
     cmb = np.array(hp.synfast(clth[:, :len(fpixw)]*(fpixw*bl)**2, nside,
-                   lmax=Slmax, fwhm=deg2rad(fwhm), new=True, verbose=False))
+                   pixwin=False, lmax=Slmax, fwhm=deg2rad(fwhm), new=True,
+                   verbose=False))
     cmbm = cmb[istokes][:, mask]
+    # allcmb.append(cmbm)
     dmA = cmbm + (randn(nstoke * npix) * sqrt(varmap)).reshape(nstoke, npix)
     dmB = cmbm + (randn(nstoke * npix) * sqrt(varmap)).reshape(nstoke, npix)
-    # allcmb.append(cmbm)
     allcl.append(esti.get_spectra(dmA, dmB))
+    allcla.append(esti.get_spectra(dmA))
 
-figure(figsize=[10, 8])
-clf()
-subplot(3, 1, 1)
-plot(lth, clth[ispecs][:, lth].T, '--k')
+# myS = cov(np.array(allcmb).reshape(nsimu, -1), rowvar=False)
 hcl = mean(allcl, 0)
 scl = std(allcl, 0)
-[plot(ellval, hcl[s], 'o', color='C%i' % s, label=r"$%s$" % spec[s])
-    for s in np.arange(nspec)]
-[fill_between(ellval, (hcl - scl/sqrt(nsimu))[s], (hcl + scl/sqrt(nsimu))[s],
-              color='C%i' % s, alpha=0.2) for s in np.arange(nspec)]
-ylabel(r"$C_\ell$")
-semilogy()
-legend(loc=4)
+hcla = mean(allcla, 0)
+scla = std(allcla, 0)
 
-subplot(3, 1, 2)
-cosmic = sqrt(2./(2 * lth + 1)) / mean(mask) * clth[ispecs][:, lth]
+figure(figsize=[12, 8])
+clf()
+subplot(3, 2, 1)
+title("Cross")
+plot(lth, clth[ispecs][:, lth].T, '--k')
+[errorbar(ellval, hcl[s], scl[s], fmt='o', color='C%i' % s, label=r"$%s$" % spec[s])
+    for s in np.arange(nspec)]
+semilogy()
+ylabel(r"$C_\ell$")
+legend(loc=4, frameon=True)
+
+subplot(3, 2, 2)
+title("Auto")
+plot(lth, clth[ispecs][:, lth].T, '--k')
+[errorbar(ellval, hcla[s], scla[s], fmt='o', color='C%i' % s, label=r"$%s$" %
+          spec[s]) for s in np.arange(nspec)]
+semilogy()
+
+
+subplot(3, 2, 3)
+# cosmic = sqrt(2./(2 * lth + 1)) / mean(mask) * clth[ispecs][:, lth]
 # plot(lth, cosmic.transpose(), '--k')
 [plot(ellval, scl[s], '--', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
       spec[s]) for s in np.arange(nspec)]
@@ -129,18 +138,33 @@ cosmic = sqrt(2./(2 * lth + 1)) / mean(mask) * clth[ispecs][:, lth]
     for s in np.arange(nspec)]
 ylabel(r"$\sigma(C_\ell)$")
 semilogy()
-legend(loc=4)
+# legend(loc=4, frameon=True)
 
-subplot(3, 1, 3)
+subplot(3, 2, 4)
+[plot(ellval, scla[s], ':', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
+      spec[s]) for s in np.arange(nspec)]
+[plot(ellval, sqrt(diag(Va)).reshape(nspec, -1)[s], 'o', color='C%i' % s)
+    for s in np.arange(nspec)]
+semilogy()
+
+subplot(3, 2, 5)
 [plot(ellval, (hcl[s]-clth[ispecs[s]][lth])/(scl[s]/sqrt(nsimu)), '--o',
       color='C%i' % s) for s in np.arange(nspec)]
 ylabel(r"$R[C_\ell]$")
 xlabel(r"$\ell$")
 ylim(-3, 3)
 grid()
+
+subplot(3, 2, 6)
+[plot(ellval, (hcla[s]-clth[ispecs[s]][lth])/(scla[s]/sqrt(nsimu)), '--o',
+      color='C%i' % s) for s in np.arange(nspec)]
+xlabel(r"$\ell$")
+ylim(-3, 3)
+grid()
+
 show()
 
-# savefig("../Plots/Git/"+"test0.png")
+savefig("../Plots/Git/"+"test0.png")
 
 if __name__ == "__main__":
     """

@@ -17,19 +17,20 @@ import healpy as hp
 import random as rd
 
 from libcov import compute_ds_dcb
+from simulation import getstokes
 
 from estimators import El
 from estimators import CovAB
 from estimators import CrossGisherMatrix
 from estimators import CrossWindowFunction
 from estimators import yQuadEstimator, ClQuadEstimator
-
+from estimators import biasQuadEstimator
 
 class xQML(object):
     """ Main class to handle the spectrum estimation """
     def __init__(
-            self, mask, bins, clth, lmax=None, Pl=None, S=None,
-            fwhm=0., spec=None, temp=False, polar=True, corr=False,
+            self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
+            S=None, fwhm=0., spec=None, temp=False, polar=True, corr=False,
             pixwin=True):
         """
         Parameters
@@ -56,6 +57,10 @@ class xQML(object):
             If True, applies pixel window function to spectra. Default: True
 
         """
+        self.bias = None
+        self.cross = NB is not None
+        self.NA = NA
+        self.NB = NB if self.cross else NA
         # Number of pixels in the mask
         # For example that would be good to have an assertion
         # on the mask size, just to check that it corresponds to a valid nside.
@@ -63,7 +68,6 @@ class xQML(object):
 
         # Map resolution (healpix)
         self.nside = hp.npix2nside(npixtot)
-
         # ipok are pixel indexes outside the mask
         self.ipok = np.arange(npixtot)[np.array(mask, bool)]
         self.mask = mask
@@ -73,7 +77,7 @@ class xQML(object):
         self.ellbins = bins
 
         # Maximum multipole based on nside (rule of thumb to avoid aliasing)
-        self.Slmax = 3 * self.nside - 1 if lmax is None else lmax
+        self.Slmax = 2 * self.nside - 1 if lmax is None else lmax
 
         # Beam 2pt function (Gaussian)
         self.bl = hp.gauss_beam(np.deg2rad(fwhm), lmax=self.Slmax+1)
@@ -82,7 +86,7 @@ class xQML(object):
         # For example that would be good to assert that the user
         # set at least polar or temp to True.
 
-        self.stokes, self.spec, self.istokes, self.ispecs = self._getstokes(
+        self.stokes, self.spec, self.istokes, self.ispecs = getstokes(
             spec, temp, polar, corr)
         self.nstokes = len(self.stokes)
         self.nspec = len(self.spec)
@@ -100,13 +104,15 @@ class xQML(object):
         else:
             self.Pl = Pl
             if S is None:
-                self.S = self._CorrelationMatrix(clth)
+                self.S = self._SignalCovMatrix(clth)
             else:
                 self.S = S
         if S is not None:
             self.S = S
 
-    def construct_esti(self, NA, NB):
+        self.construct_esti(NA=NA, NB=NB)
+
+    def construct_esti(self, NA, NB=None):
         """
         Compute the inverse of the datasets pixel covariance matrices C,
         the quadratic matrix parameter E, and inverse of the window
@@ -120,19 +126,24 @@ class xQML(object):
             Noise covariance matrix of dataset B
 
         """
+        self.cross = NB is not None
+        self.NA = NA
+        self.NB = NB if self.cross else NA
+
         # Invert (signalA + noise) matrix
-        self.invCa = linalg.inv(self.S + NA)
+        self.invCa = linalg.inv(self.S + self.NA)
 
         # Invert (signalB + noise) matrix
-        self.invCb = linalg.inv(self.S + NB)
+        self.invCb = linalg.inv(self.S + self.NB)
 
         # Compute E using Eq...
         self.E = El(self.invCa, self.invCb, self.Pl)
-
+        if not self.cross:
+            self.bias = biasQuadEstimator(self.NA, self.E)
         # Finally compute invW by inverting...
         self.invW = linalg.inv(CrossWindowFunction(self.E, self.Pl))
 
-    def get_spectra(self, map1, map2):
+    def get_spectra(self, mapA, mapB=None):
         """
         Return the unbiased spectra
 
@@ -150,92 +161,25 @@ class xQML(object):
         """
         # Should compute auto-spectra if map2 == None ?
         # Define conditions based on the map size
-        cond_size1 = np.size(map1) == self.nstokes * self.npix
-        cond_size2 = np.size(map2) == self.nstokes * self.npix
-        d1 = map1 if cond_size1 else map1[self.istokes, self.mask]
-        d2 = map2 if cond_size2 else map2[self.istokes, self.mask]
+        self.cross = mapB is not None
+        cond_sizeA = np.size(mapA) == self.nstokes * self.npix
+        dA = mapA if cond_sizeA else mapA[self.istokes, self.mask]
+        if self.cross:
+            cond_sizeB = np.size(mapB) == self.nstokes * self.npix
+            dB = mapB if cond_sizeB else mapB[self.istokes, self.mask]
 
-        # yl is...
-        yl = yQuadEstimator(d1.ravel(), d2.ravel(), self.E)
-
-        # cl is obtained using...
-        cl = ClQuadEstimator(self.invW, yl)
+            yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.E)
+            cl = ClQuadEstimator(self.invW, yl)
+        else:
+            if self.bias is None:
+                self.bias = biasQuadEstimator(self.NA, self.E)
+            yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.E) - self.bias
+            cl = ClQuadEstimator(self.invW, yl)
 
         # Return the reshaped set of cls
         return cl.reshape(self.nspec, -1)
 
-    def _getstokes(self, spec=None, temp=False, polar=False, corr=False):
-        """
-        Get the Stokes parameters number and name(s)
-
-        Parameters
-        ----------
-        spec : bool
-            If True, get Stokes parameters for polar (default: True)
-        polar : bool
-            If True, get Stokes parameters for polar (default: True)
-        temp : bool
-            If True, get Stokes parameters for temperature (default: False)
-        corr : bool
-            If True, get Stokes parameters for EB and TB (default: False)
-
-        Returns
-        ----------
-        stokes : list of string
-            Stokes variables names
-        spec : int
-            Spectra names
-        istokes : list
-            Indexes of power spectra
-
-        Example
-        ----------
-        >>> getstokes(polar=True, temp=False, corr=False)
-        (['Q', 'U'], ['EE', 'BB'], [1, 2])
-        >>> getstokes(polar=True, temp=True, corr=False)
-        (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
-        >>> getstokes(polar=True, temp=True, corr=True)
-        (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'EB', 'TB'], [0, 1, 2, 3, 4,
-        5])
-        """
-        if spec is not None:
-            _temp = "TT" in spec or "TE" in spec or "TB" in spec or temp
-            _polar = "EE" in spec or "BB" in spec or "TE" in spec or "TB" in \
-                spec or "EB" in spec or polar
-            _corr = "TE" in spec or "TB" in spec or "EB" in spec or corr
-        else:
-            _temp = temp
-            _polar = polar
-            _corr = corr
-
-        speclist = []
-        if _temp or (spec is None and corr):
-            speclist.extend(["TT"])
-        if _polar:
-            speclist.extend(["EE", "BB"])
-        if spec is not None and not corr:
-            if 'TE' in spec:
-                speclist.extend(["TE"])
-            if 'EB' in spec:
-                speclist.extend(["EB"])
-            if 'TB' in spec:
-                speclist.extend(["TB"])
-
-        elif _corr:
-            speclist.extend(["TE", "EB", "TB"])
-
-        stokes = []
-        if _temp:
-            stokes.extend(["I"])
-        if _polar:
-            stokes.extend(["Q", "U"])
-
-        ispecs = [['TT', 'EE', 'BB', 'TE', 'EB', 'TB'].index(s) for s
-                  in speclist]
-        istokes = [['I', 'Q', 'U'].index(s) for s in stokes]
-        return stokes, speclist, istokes, ispecs
-
-    def get_covariance(self):
+    def get_covariance(self, cross=None):
         """
         Returns the analytical covariance of the spectrum based on the fiducial
         spectra model and pixel noise matrix.
@@ -247,14 +191,18 @@ class xQML(object):
 
         """
         # # Do Gll' = S^-1.El.S^-1.El'
-        G = CrossGisherMatrix(self.E, self.S)
+        cross = self.cross if cross is None else cross
+        if cross:
+            G = CrossGisherMatrix(self.E, self.S)
+        else:
+            G = CrossGisherMatrix(self.E, self.S + self.NA)
 
         # # Do V = W^-1.G.W^-1 + W^-1
         V = CovAB(self.invW, G)
 
         return(V)
 
-    def _CorrelationMatrix(self, clth):
+    def _SignalCovMatrix(self, clth):
         """
         Compute correlation matrix S = sum_l Pl*Cl
 
