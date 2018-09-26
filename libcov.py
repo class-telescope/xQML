@@ -12,9 +12,6 @@ import healpy as hp
 import math
 from scipy import special
 
-# from spin_functions import dlss, pl0
-# from spin_functions import F1l2, F2l2
-# from libangles import polrotangle
 from simulation import getstokes
 from simulation import extrapolpixwin
 from xqml_utils import progress_bar
@@ -215,8 +212,9 @@ def compute_PlS(
         if timing:
             progress_bar(i, npi, -0.5 * (start-timeit.default_timer()))
         for j in np.arange(i, npi):
+            cos_chi = allcosang[i, j]
             if temp:
-                pl = norm*pl0(allcosang[i, j], Slmax)[2:]
+                pl = norm*pl0(cos_chi, Slmax)[2:]
                 elem = np.sum((pl * clthn[0]))
                 S[i, j] = elem
                 S[j, i] = elem
@@ -230,7 +228,6 @@ def compute_PlS(
                 jj = j+ponpi
                 cij, sij = polrotangle(rpix[:, i], rpix[:, j])
                 cji, sji = polrotangle(rpix[:, j], rpix[:, i])
-                cos_chi = allcosang[i, j]
 
                 # Tegmark version
                 Q22 = norm * F1l2(cos_chi, Slmax)
@@ -245,9 +242,9 @@ def compute_PlS(
 
                 if TE or TB:
                     # # Matt version
-                    # d20 = -dlss(cos_chi, 2,  0, Slmax)[2:]
-                    # P02 = norm * d20
-                    P02 = -norm * F1l0(cos_chi, Slmax)
+                    d20 = -dlss(cos_chi, 2,  0, Slmax)[2:]
+                    P02 = norm * d20
+                    # P02 = -norm * F1l0(cos_chi, Slmax)
                     elemA = 0
                     elemB = 0
                     elemC = 0

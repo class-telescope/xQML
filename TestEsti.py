@@ -30,16 +30,16 @@ clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
 Clthshape = zeros(((6,)+shape(clth)[1:]))
 Clthshape[:4] = clth
 clth = Clthshape
-EB = 0.1
+EB = 0.5
 clth[4] = EB*sqrt(clth[1]*clth[2])
-TB = 0.0
+TB = 0.5
 clth[5] = TB*sqrt(clth[0]*clth[2])
 
 lth = arange(2, lmax+1)
-spec = None #['EB']
+# spec = ['TE', 'EB', 'TB']
 temp = True
-polar = False
-corr = False
+polar = True
+corr = True
 pixwin = True
 
 ellbins = arange(2, lmax + 2, deltal)
@@ -51,7 +51,7 @@ nbins = len(ellbins) - 1
 # Create mask
 t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
 mask = np.ones(hp.nside2npix(nside), bool)
-# mask[abs(90 - rad2deg(t)) < 30] = False
+mask[abs(90 - rad2deg(t)) < 30] = False
 npix = sum(mask)
 
 fwhm = 0.5
@@ -93,7 +93,7 @@ esti.construct_esti(NoiseVar, NoiseVar)
 fpixw = extrapolpixwin(nside, lmax+2, pixwin=pixwin)
 start = timeit.default_timer()
 for n in np.arange(nsimu):
-    progress_bar(n, nsimu, timeit.default_timer() - start)
+    # progress_bar(n, nsimu, timeit.default_timer() - start)
     cmb = np.array(hp.synfast(clth[:, :len(fpixw)]*(fpixw*bl)**2, nside,
                    pixwin=False, lmax=Slmax, fwhm=deg2rad(fwhm), new=True,
                    verbose=False))
@@ -164,7 +164,7 @@ grid()
 
 show()
 
-savefig("../Plots/Git/"+"test0.png")
+# savefig("../Plots/Git/"+"test0.png")
 
 if __name__ == "__main__":
     """
