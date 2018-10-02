@@ -21,28 +21,34 @@ from simulation import extrapolpixwin
 ion()
 
 # if __name__ == "__main__":
-nside = 4
+
+# # Inputs
+nside = 64
 lmax = 2 * nside - 1
 Slmax = 2 * nside - 1
-deltal = 1
+dell = 10
 nsimu = 1000
 clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
 Clthshape = zeros(((6,)+shape(clth)[1:]))
 Clthshape[:4] = clth
 clth = Clthshape
-EB = 0.5
+
+# # spectra correlations level
+EB = 0.0
 clth[4] = EB*sqrt(clth[1]*clth[2])
-TB = 0.5
+TB = 0.0
 clth[5] = TB*sqrt(clth[0]*clth[2])
 
+# provide list of specs to be computed, and/or options
 lth = arange(2, lmax+1)
-# spec = ['TE', 'EB', 'TB']
-temp = True
+spec = None # ['EB', 'TE', 'TB']
+temp = False
 polar = True
-corr = True
+corr = False
 pixwin = True
 
-ellbins = arange(2, lmax + 2, deltal)
+# ellbins = np.append(2, arange(50, lmax + 2, dell))
+ellbins = np.arange(2, lmax + 2, dell)
 ellbins[-1] = lmax + 1
 
 P, Q, ell, ellval = GetBinningMatrix(ellbins, lmax)
@@ -51,7 +57,14 @@ nbins = len(ellbins) - 1
 # Create mask
 t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
 mask = np.ones(hp.nside2npix(nside), bool)
-mask[abs(90 - rad2deg(t)) < 30] = False
+
+# # Large scale mask
+# mask[abs(90 - rad2deg(t)) < 30] = False
+
+# # Small scale mask (do not forget to change dell)
+mask[(90 - rad2deg(t)) < 78] = False
+fsky = np.mean(mask)
+print("fsky=%.2g %%" % (100*fsky))
 npix = sum(mask)
 
 fwhm = 0.5
@@ -95,7 +108,7 @@ start = timeit.default_timer()
 for n in np.arange(nsimu):
     # progress_bar(n, nsimu, timeit.default_timer() - start)
     cmb = np.array(hp.synfast(clth[:, :len(fpixw)]*(fpixw*bl)**2, nside,
-                   pixwin=False, lmax=Slmax, fwhm=deg2rad(fwhm), new=True,
+                   pixwin=False, lmax=Slmax, fwhm=0.0, new=True,
                    verbose=False))
     cmbm = cmb[istokes][:, mask]
     # allcmb.append(cmbm)
@@ -112,19 +125,20 @@ scla = std(allcla, 0)
 
 figure(figsize=[12, 8])
 clf()
+Delta = (ellbins[1:] - ellbins[:-1])/2.
 subplot(3, 2, 1)
 title("Cross")
-plot(lth, clth[ispecs][:, lth].T, '--k')
-[errorbar(ellval, hcl[s], scl[s], fmt='o', color='C%i' % s, label=r"$%s$" % spec[s])
+plot(lth, (lth*(lth+1)/2./np.pi)[:, None]*clth[ispecs][:, lth].T, '--k')
+[errorbar(ellval, ellval*(ellval+1)/2./np.pi*hcl[s], yerr=scl[s], xerr=Delta, fmt='o', color='C%i' % ispecs[s], label=r"$%s$" % spec[s])
     for s in np.arange(nspec)]
 semilogy()
-ylabel(r"$C_\ell$")
+ylabel(r"$D_\ell$")
 legend(loc=4, frameon=True)
 
 subplot(3, 2, 2)
 title("Auto")
-plot(lth, clth[ispecs][:, lth].T, '--k')
-[errorbar(ellval, hcla[s], scla[s], fmt='o', color='C%i' % s, label=r"$%s$" %
+plot(lth,(lth*(lth+1)/2./np.pi)[:, None]*clth[ispecs][:, lth].T, '--k')
+[errorbar(ellval, ellval*(ellval+1)/2./np.pi*hcla[s], yerr=scla[s], xerr=Delta, fmt='o', color='C%i' % ispecs[s], label=r"$%s$" %
           spec[s]) for s in np.arange(nspec)]
 semilogy()
 
@@ -134,7 +148,7 @@ subplot(3, 2, 3)
 # plot(lth, cosmic.transpose(), '--k')
 [plot(ellval, scl[s], '--', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
       spec[s]) for s in np.arange(nspec)]
-[plot(ellval, sqrt(diag(V)).reshape(nspec, -1)[s], 'o', color='C%i' % s)
+[plot(ellval, sqrt(diag(V)).reshape(nspec, -1)[s], 'o', color='C%i' % ispecs[s])
     for s in np.arange(nspec)]
 ylabel(r"$\sigma(C_\ell)$")
 semilogy()
@@ -143,28 +157,29 @@ semilogy()
 subplot(3, 2, 4)
 [plot(ellval, scla[s], ':', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
       spec[s]) for s in np.arange(nspec)]
-[plot(ellval, sqrt(diag(Va)).reshape(nspec, -1)[s], 'o', color='C%i' % s)
+[plot(ellval, sqrt(diag(Va)).reshape(nspec, -1)[s], 'o', color='C%i' % ispecs[s])
     for s in np.arange(nspec)]
 semilogy()
 
 subplot(3, 2, 5)
-[plot(ellval, (hcl[s]-clth[ispecs[s]][lth])/(scl[s]/sqrt(nsimu)), '--o',
-      color='C%i' % s) for s in np.arange(nspec)]
+[plot(ellval, (hcl[s]-P.dot(clth[ispecs[s]][lth]))/(scl[s]/sqrt(nsimu)), '--o',
+      color='C%i' % ispecs[s]) for s in np.arange(nspec)]
 ylabel(r"$R[C_\ell]$")
 xlabel(r"$\ell$")
 ylim(-3, 3)
 grid()
 
 subplot(3, 2, 6)
-[plot(ellval, (hcla[s]-clth[ispecs[s]][lth])/(scla[s]/sqrt(nsimu)), '--o',
-      color='C%i' % s) for s in np.arange(nspec)]
+[plot(ellval, (hcla[s]-P.dot(clth[ispecs[s]][lth]))/(scla[s]/sqrt(nsimu)), '--o',
+      color='C%i' % ispecs[s]) for s in np.arange(nspec)]
 xlabel(r"$\ell$")
 ylim(-3, 3)
 grid()
 
 show()
 
-# savefig("../Plots/Git/"+"test0.png")
+savefig("../Plots/Git/Nside%i_dell%i_fsky%.3g_spec%s.png" %
+        (nside, dell, fsky, "".join(spec)))
 
 if __name__ == "__main__":
     """

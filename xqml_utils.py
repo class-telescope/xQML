@@ -76,14 +76,14 @@ def progress_bar(i, n, dt):
         for k in np.arange(ntot-ndone):
             a += ' '
         fra = i/(n-1.)
-        remain = round(dt/fra*(1-fra))
-        min = str(round(remain/60., 1))
-        a += '| '+str(int(100.*fra))+'%'+" : "+str(remain)+" sec = "+min+" min"
+        remain = dt/fra*(1-fra)
+        minu = remain/60.
+        a += '| %i %% : %.1f sec (%.1f min)' % (int(100.*fra), remain, minu)
         sys.stdout.write(a)
-        sys.stdout.flush()
+        # sys.stdout.flush()
         if i == n-1:
             sys.stdout.write(
-                ' Done. Total time = '+str(np.ceil(dt))+" sec = "+min+" min\n")
+                '\n => Done, total time = %.1f sec (%.1f min)\n' % (dt, dt/60.))
             sys.stdout.flush()
 
 

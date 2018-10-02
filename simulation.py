@@ -135,7 +135,7 @@ def getstokes(spec=None, temp=False, polar=False, corr=False):
             spec or "EB" in spec or polar
         _corr = "TE" in spec or "TB" in spec or "EB" in spec or corr
         if not _temp and not _polar and not _corr:
-            print("invalid spectra list")
+            print("invalid spectra list and/or no options")
     else:
         _temp = temp
         _polar = polar

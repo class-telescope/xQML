@@ -458,7 +458,7 @@ def compute_S(
     start = timeit.default_timer()
     for i in np.arange(npi):
         if timing:
-            progress_bar(i, npi, -0.5 * (start-timeit.default_timer()))
+            progress_bar(i, npi, -0.25 * (start-timeit.default_timer()))
         for j in np.arange(i, npi):
             if temp:
                 pl = norm*pl0(allcosang[i, j], Slmax)
