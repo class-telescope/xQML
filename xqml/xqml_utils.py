@@ -11,6 +11,78 @@ import timeit
 import numpy as np
 
 
+def getstokes(spec=None, temp=False, polar=False, corr=False):
+    """
+    Get the Stokes parameters number and name(s)
+
+    Parameters
+    ----------
+    spec : bool
+        If True, get Stokes parameters for polar (default: True)
+    polar : bool
+        If True, get Stokes parameters for polar (default: True)
+    temp : bool
+        If True, get Stokes parameters for temperature (default: False)
+    corr : bool
+        If True, get Stokes parameters for EB and TB (default: False)
+
+    Returns
+    ----------
+    stokes : list of string
+        Stokes variables names
+    spec : int
+        Spectra names
+    istokes : list
+        Indexes of power spectra
+
+    Example
+    ----------
+    >>> getstokes(polar=True, temp=False, corr=False)
+    (['Q', 'U'], ['EE', 'BB'], [1, 2])
+    >>> getstokes(polar=True, temp=True, corr=False)
+    (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
+    >>> getstokes(polar=True, temp=True, corr=True)
+    (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'EB', 'TB'], [0, 1, 2, 3, 4, 5])
+    """
+    if spec is not None:
+        _temp = "TT" in spec or "TE" in spec or "TB" in spec or temp
+        _polar = "EE" in spec or "BB" in spec or "TE" in spec or "TB" in \
+            spec or "EB" in spec or polar
+        _corr = "TE" in spec or "TB" in spec or "EB" in spec or corr
+        if not _temp and not _polar and not _corr:
+            print("invalid spectra list and/or no options")
+    else:
+        _temp = temp
+        _polar = polar
+        _corr = corr
+
+    speclist = []
+    if _temp or (spec is None and corr):
+        speclist.extend(["TT"])
+    if _polar:
+        speclist.extend(["EE", "BB"])
+    if spec is not None and not corr:
+        if 'TE' in spec:
+            speclist.extend(["TE"])
+        if 'EB' in spec:
+            speclist.extend(["EB"])
+        if 'TB' in spec:
+            speclist.extend(["TB"])
+
+    elif _corr:
+        speclist.extend(["TE", "EB", "TB"])
+
+    stokes = []
+    if _temp:
+        stokes.extend(["I"])
+    if _polar:
+        stokes.extend(["Q", "U"])
+
+    ispecs = [['TT', 'EE', 'BB', 'TE', 'EB', 'TB'].index(s) for s in speclist]
+    istokes = [['I', 'Q', 'U'].index(s) for s in stokes]
+    return stokes, speclist, istokes, ispecs
+
+
 def ComputeSizeDs_dcb(nside, fsky, deltal=1):
     """
     ???

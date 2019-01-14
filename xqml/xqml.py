@@ -16,7 +16,7 @@ import numpy as np
 import healpy as hp
 import random as rd
 
-from simulation import getstokes
+from xqml_utils import getstokes
 
 from estimators import El
 from estimators import CovAB
@@ -25,19 +25,17 @@ from estimators import CrossWindowFunction
 from estimators import yQuadEstimator, ClQuadEstimator
 from estimators import biasQuadEstimator
 
-from libcov import compute_ds_dcb
+from libcov import compute_ds_dcb, S_bins_MC, compute_S, covth_bins_MC, compute_PlS, SignalCovMatrix
 
-import _libcov as libcov_mp
 
 __all__ = ['xQML']
 
 
 class xQML(object):
     """ Main class to handle the spectrum estimation """
-    def __init__(
-            self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
-            S=None, fwhm=0., spec=None, temp=False, polar=True, corr=False,
-            pixwin=True):
+    def __init__( self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
+                  S=None, fwhm=0., bell=None, spec=None, temp=False, polar=True, corr=False,
+                  pixwin=True):
         """
         Parameters
         ----------
@@ -53,6 +51,8 @@ class xQML(object):
             Normalize Legendre polynomials dS/dCl. Default: None
         fwhm : float, optional
             FWHM of the experiment beam
+        bell : ndarray, optional
+            beam transfer function (priority over fwhm)
         polar : boolean, optional
             Compute the polarisation part E and B. Default: True
         temp : boolean, optional
@@ -87,6 +87,8 @@ class xQML(object):
 
         # Beam 2pt function (Gaussian)
         self.bl = hp.gauss_beam(np.deg2rad(fwhm), lmax=self.Slmax+1)
+        if bell is not None:
+            self.bl = bell[:self.Slmax+1]
 
         # Set the Stokes parameters needed
         # For example that would be good to assert that the user
@@ -96,6 +98,7 @@ class xQML(object):
             spec, temp, polar, corr)
         self.nstokes = len(self.stokes)
         self.nspec = len(self.spec)
+        self.pixwin = pixwin
 
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
@@ -106,7 +109,7 @@ class xQML(object):
             self.Pl, self.S = compute_ds_dcb(
                 self.ellbins, self.nside, self.ipok,
                 self.bl, clth, self.Slmax,
-                self.spec, pixwin=pixwin, timing=True, MC=False)
+                self.spec, pixwin=self.pixwin, timing=True, MC=False, openMP=True)
         else:
             self.Pl = Pl
             if S is None:
@@ -117,6 +120,14 @@ class xQML(object):
             self.S = S
 
         self.construct_esti(NA=NA, NB=NB)
+
+    def compute_dSdC( self, clth, lmax=None, timing=True, MC=False, openMP=True):
+        if lmax is None:
+            lmax = 2*self.nside-1   #Why ?
+        
+        self.Pl, self.S = compute_ds_dcb( self.ellbins, self.nside, self.ipok, self.bl, clth, lmax,
+                                          self.spec, pixwin=self.pixwin, timing=timing, MC=MC, openMP=openMP)
+        return( self.Pl, self.S)
 
     def construct_esti(self, NA, NB=None):
         """
@@ -223,7 +234,7 @@ class xQML(object):
         """
         # Choose only needed spectra according to ispec, and truncate
         # the ell range according the bin range. Flatten (1D) the result.
-        model = clth[self.ispecs][:, 2:int(self.ellbins[-1])].flatten()
+        model = clth[self.ispecs][:,2:int(self.ellbins[-1])].ravel()
 
-        # # Return scalar product btw Pl and the fiducial spectra.
-        return np.sum(self.Pl * model[:, None, None], 0)
+        # Return scalar product btw Pl and the fiducial spectra.
+        return SignalCovMatrix( self.Pl, model)

@@ -12,15 +12,14 @@ import healpy as hp
 import math
 from scipy import special
 
-from simulation import getstokes
 from simulation import extrapolpixwin
-from xqml_utils import progress_bar
+from xqml_utils import getstokes, progress_bar
 
 import _libcov as clibcov
 
-def compute_ds_dcb(
-        ellbins, nside, ipok, bl, clth, Slmax, spec,
-        pixwin=False, timing=False, MC=0, Sonly=False, openMP=False):
+
+def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
+                    pixwin=False, timing=False, MC=0, Sonly=False, openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -70,14 +69,6 @@ def compute_ds_dcb(
     ... pixwin=True, timing=False, MC=0, Sonly=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (1128.61613, 29501.83265)
-
-    >>> Pl, S = compute_ds_dcb(
-    ... np.array([2,4,5,8]), 2, np.array([0,1,4,10,11]), np.arange(10),
-    ... clth=np.arange(60).reshape(6,-1), Slmax=8,
-    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"],
-    ... pixwin=False, timing=False, MC=0, Sonly=False)
-    >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (2590.55388, 65797.6979)
     """
     if Slmax < ellbins[-1]-1:
         print("WARNING : Slmax < lmax")
@@ -117,18 +108,19 @@ def compute_ds_dcb(
         nbins = (len(ellbins)-1)*len(spec)
         npix = len(ipok)*len(istokes)
         Pl = np.ndarray( nbins*npix**2)
-        print( "size dSdC: %d" % len(Pl))
+##         print( "size dSdC: %d" % len(Pl))
         clibcov.dSdC( nside, len(istokes), ellbins, ipok, bell, Pl)
         Pl = Pl.reshape( nbins, npix, npix)
-        S = np.dot(np.transpose(Pl),clth[ispecs][:,ellbins[:-1]].ravel())
+        S = SignalCovMatrix(Pl,clth[ispecs][:,2:int(ellbins[-1])].ravel())
     else:
         Pl, S = compute_PlS(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
             spec=spec, pixwin=pixwin, timing=timing)
 
-    print( "Total time: %.1f sec" % (timeit.default_timer()-start))
+    print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))
 
     return Pl, S
+
 
 
 def compute_PlS(
@@ -253,10 +245,10 @@ def compute_PlS(
                 R22 = -norm * F2l2(cos_chi, Slmax)
 
                 # # Matt version
-                # d2p2 = dlss(cos_chi, 2,  2, Slmax+1)
-                # d2m2 = dlss(cos_chi, 2, -2, Slmax+1)
-                # Q22 = ( d2p2 + d2m2 )[2:]/2.
-                # R22 = ( d2p2 - d2m2 )[2:]/2.
+                # d2p2 = dlss(cos_chi, 2,  2, Slmax)
+                # d2m2 = dlss(cos_chi, 2, -2, Slmax)
+                # Q22 = norm * ( d2p2 + d2m2 )[2:]/2.
+                # R22 = norm * ( d2p2 - d2m2 )[2:]/2.
 
                 if TE or TB:
                     # # Matt version
@@ -1117,52 +1109,21 @@ def F2l2(z, lmax):
         bla = a0 * (a1 - a2)
         return bla
 
-def dlss(z, s1, s2, lmax):
-  '''
-  Matt version
-  '''
-  d = np.zeros((lmax+1))
-  if s1 < abs(s2):
-    print("error spins, s1<|s2|")
-    return
-  # sign = -1 if (s1 + s2) and 1 else 1
-  sign = (-1)**(s1-s2)
-  d[s1] = sign / 2.**s1 * math.sqrt(math.factorial(2.*s1)/math.factorial(1.*s1+s2)/math.factorial(1.*s1-s2)) *  (1.+z)**(.5*(s1+s2)) *  (1.-z)**(.5*(s1-s2)) 
 
-  l1 = s1+1.
-  rhoSSL1 = math.sqrt( (l1*l1 - s1*s1) * (l1*l1 - s2*s2) ) / l1
-  d[s1+1] = (2*s1+1.)*(z-s2/(s1+1.)) * d[s1] / rhoSSL1
-  for l in np.arange(s1+1, lmax, 1) : #( l=s1+1; l<lmax; l++) {
-    l1 = l+1.
-    rhoSSL  = math.sqrt( (l*l*1.- s1*s1) * (l*l*1.- s2*s2) ) / (l*1.)
-    rhoSSL1 = math.sqrt( (l1*l1 - s1*s1) * (l1*l1 - s2*s2) ) / l1
-    d[l+1] = ( (2.*l+1.)*(z-s1*s2/(l*1.)/l1)*d[l] - rhoSSL*d[l-1] ) / rhoSSL1
-  return d
 
-# def dlss(z, s1, s2, lmax):
-#     '''
-#     Matt version
-#     '''
-#     d = np.zeros((lmax+1))
-#     if s1 < abs(s2):
-#         print("error spins, s1<|s2|")
-#     return
-#     # sign = -1 if (s1 + s2) and 1 else 1
-#     sign = (-1)**(s1-s2)
-#     d[s1] = sign / 2.**s1 * math.sqrt(math.factorial(2.*s1)/math.factorial(
-#         1.*s1 + s2)/math.factorial(1.*s1-s2)) * (1.+z)**(.5*(s1+s2)) * (
-#         1.-z)**(.5 * (s1-s2))
+def SignalCovMatrix(Pl, model):
+    """
+    Compute correlation matrix S = sum_l Pl*Cl
+    
+    Parameters
+    ----------
+    clth : ndarray of floats
+    Array containing fiducial CMB spectra (unbinned).
+    """
+    # Return scalar product btw Pl and the fiducial spectra.
+    return np.sum(Pl * model[:, None, None], 0)
+#        return( np.dot(np.transpose(self.Pl),model))
 
-#     l1 = s1+1.
-#     rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
-#     d[s1+1] = (2*s1+1.)*(z-s2/(s1+1.)) * d[s1] / rhoSSL1
-#     for l in np.arange(s1+1, lmax, 1):
-#         l1 = l+1.
-#         rhoSSL = math.sqrt((l*l*1. - s1*s1) * (l*l*1. - s2*s2)) / (l*1.)
-#         rhoSSL1 = math.sqrt((l1*l1 - s1*s1) * (l1*l1 - s2*s2)) / l1
-#         d[l+1] = ((2.*l+1.)*(
-#             z-s1*s2/(l*1.)/l1)*d[l] - rhoSSL*d[l-1]) / rhoSSL1
-#     return d
 
 
 if __name__ == "__main__":

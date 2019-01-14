@@ -1,9 +1,8 @@
 #include "libcov.h"
 
-void build_dSdC( int nside, int nstokes, int npix, int inl, long *ellbins, long *ipix, double *bl, double* dSdC)
+void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long *ipix, double *bl, double* dSdC)
 {
-  
-  const int lmax=ellbins[inl-1];
+  const int lmax=ellbins[nbin]-1;
   const int lmax1 = lmax+1;
   const int ns=3, nspecall = 4;
   const int nspec = nstokes2nspec(nstokes);
@@ -14,7 +13,9 @@ void build_dSdC( int nside, int nstokes, int npix, int inl, long *ellbins, long 
 //   fprintf( stdout, "nstokes=%d\n", nstokes);
 //   fprintf( stdout, "nspec=%d\n", nspec);
 
-#pragma omp parallel default(none) shared(stdout,inl,nside,npix,nstokes,dSdC,ipix,bl,ellbins)
+  memset( dSdC, 0., (nspec*nbin*nstokes*npix*nstokes*npix) * sizeof(double));
+
+#pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins)
   {
     int s=0;
     double vr[3], vc[3];
@@ -36,41 +37,43 @@ void build_dSdC( int nside, int nstokes, int npix, int inl, long *ellbins, long 
 
 	QML_compute_dSdC( vr, vc, lmax, nstokes, dSdCpix);
 
-	for( int il=0; il<inl; il++) {
-	  int l = ellbins[il];
-	  s=0;
+	for( int ib=0; ib<nbin; ib++) {
+// 	  int l=ellbins[ib];
+ 	  for( int l=ellbins[ib]; l<=ellbins[ib+1]-1; l++) {
+	    s=0;
 
-	  if( nstokes != 2) {
-	    dSdC(s*inl+il,0*npix+cpix,0*npix+rpix) = dSdCpix[0*lmax1+l][0*ns+0] * bl[0*lmax1+l]*bl[0*lmax1+l];  //TT on II
-	    s++;
-	  }
-	  
-	  //EE-BB
-	  if( nstokes > 1) {
-	    int s1=s;
-	    int s2=s+1;
-	    dSdC(s*inl+il,s1*npix+cpix,s1*npix+rpix) = dSdCpix[1*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QQ
-	    dSdC(s*inl+il,s2*npix+cpix,s1*npix+rpix) = dSdCpix[1*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QU
-	    dSdC(s*inl+il,s1*npix+cpix,s2*npix+rpix) = dSdCpix[1*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UQ
-	    dSdC(s*inl+il,s2*npix+cpix,s2*npix+rpix) = dSdCpix[1*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UU
-	    s++;
+	    if( nstokes != 2) {
+	      dSdC(s*nbin+ib,0*npix+cpix,0*npix+rpix) += dSdCpix[0*lmax1+l][0*ns+0] * bl[0*lmax1+l]*bl[0*lmax1+l];  //TT on II
+	      s++;
+	    }
 	    
-	    dSdC(s*inl+il,s1*npix+cpix,s1*npix+rpix) = dSdCpix[2*lmax1+l][1*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QQ
-	    dSdC(s*inl+il,s2*npix+cpix,s1*npix+rpix) = dSdCpix[2*lmax1+l][2*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QU
-	    dSdC(s*inl+il,s1*npix+cpix,s2*npix+rpix) = dSdCpix[2*lmax1+l][1*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UQ
-	    dSdC(s*inl+il,s2*npix+cpix,s2*npix+rpix) = dSdCpix[2*lmax1+l][2*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UU
-	    s++;
-	  }
+	    //EE-BB
+	    if( nstokes > 1) {
+	      int s1=s;
+	      int s2=s+1;
+	      dSdC(s*nbin+ib,s1*npix+cpix,s1*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QQ
+	      dSdC(s*nbin+ib,s2*npix+cpix,s1*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QU
+	      dSdC(s*nbin+ib,s1*npix+cpix,s2*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UQ
+	      dSdC(s*nbin+ib,s2*npix+cpix,s2*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UU
+	      s++;
+	      
+	      dSdC(s*nbin+ib,s1*npix+cpix,s1*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QQ
+	      dSdC(s*nbin+ib,s2*npix+cpix,s1*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QU
+	      dSdC(s*nbin+ib,s1*npix+cpix,s2*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UQ
+	      dSdC(s*nbin+ib,s2*npix+cpix,s2*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UU
+	      s++;
+	    }
+	    
+	    //TE
+	    if( nstokes == 3) {
+	      dSdC(s*nbin+ib,1*npix+cpix,0*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
+	      dSdC(s*nbin+ib,2*npix+cpix,0*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
+	      dSdC(s*nbin+ib,0*npix+cpix,1*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
+	      dSdC(s*nbin+ib,0*npix+cpix,2*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
+	    }
+ 	  } /* end loop l */
 	  
-	  //TE
-	  if( nstokes == 3) {
-	    dSdC(s*inl+il,1*npix+cpix,0*npix+rpix) = dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
-	    dSdC(s*inl+il,2*npix+cpix,0*npix+rpix) = dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
-	    dSdC(s*inl+il,0*npix+cpix,1*npix+rpix) = dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
-	    dSdC(s*inl+il,0*npix+cpix,2*npix+rpix) = dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
-	  }
-	  
-	} /* end loop l */
+	} /* end loop bins */
 	
       } /* end loop rpix */
     } /* end loop cpix */
@@ -132,26 +135,26 @@ void QML_compute_dSdC( double *vr, double *vc, int lmax, int nstokes, double **d
       dSdCpix[0*(lmax+1)+l][0*ns + 0] = norm * pl[l] ;  //TT on II
 
     if( nstokes > 1) {
-      Q22 = ( d2p2[l] + d2m2[l] )/2.;
-      R22 = ( d2p2[l] - d2m2[l] )/2.;
+      Q22 = norm * ( d2p2[l] + d2m2[l] )/2.;
+      R22 = norm * ( d2p2[l] - d2m2[l] )/2.;
       
-      dSdCpix[1*(lmax+1)+l][1*ns + 1] = norm * ( cos2aij*cos2aji*Q22 + sin2aij*sin2aji*R22);  //EE on QQ
-      dSdCpix[1*(lmax+1)+l][2*ns + 1] = norm * (-cos2aij*sin2aji*Q22 + sin2aij*cos2aji*R22);  //EE on QU
-      dSdCpix[1*(lmax+1)+l][1*ns + 2] = norm * (-sin2aij*cos2aji*Q22 + cos2aij*sin2aji*R22);  //EE on UQ
-      dSdCpix[1*(lmax+1)+l][2*ns + 2] = norm * ( sin2aij*sin2aji*Q22 + cos2aij*cos2aji*R22);  //EE on UU
+      dSdCpix[1*(lmax+1)+l][1*ns + 1] = ( cos2aij*cos2aji*Q22 + sin2aij*sin2aji*R22);  //EE on QQ
+      dSdCpix[1*(lmax+1)+l][2*ns + 1] = (-cos2aij*sin2aji*Q22 + sin2aij*cos2aji*R22);  //EE on QU
+      dSdCpix[1*(lmax+1)+l][1*ns + 2] = (-sin2aij*cos2aji*Q22 + cos2aij*sin2aji*R22);  //EE on UQ
+      dSdCpix[1*(lmax+1)+l][2*ns + 2] = ( sin2aij*sin2aji*Q22 + cos2aij*cos2aji*R22);  //EE on UU
       
-      dSdCpix[2*(lmax+1)+l][1*ns + 1] = norm * ( cos2aij*cos2aji*R22 + sin2aij*sin2aji*Q22);  //BB on QQ
-      dSdCpix[2*(lmax+1)+l][2*ns + 1] = norm * (-cos2aij*sin2aji*R22 + sin2aij*cos2aji*Q22);  //BB on QU
-      dSdCpix[2*(lmax+1)+l][1*ns + 2] = norm * (-sin2aij*cos2aji*R22 + cos2aij*sin2aji*Q22);  //BB on UQ
-      dSdCpix[2*(lmax+1)+l][2*ns + 2] = norm * ( sin2aij*sin2aji*R22 + cos2aij*cos2aji*Q22);  //BB on UU
+      dSdCpix[2*(lmax+1)+l][1*ns + 1] = ( cos2aij*cos2aji*R22 + sin2aij*sin2aji*Q22);  //BB on QQ
+      dSdCpix[2*(lmax+1)+l][2*ns + 1] = (-cos2aij*sin2aji*R22 + sin2aij*cos2aji*Q22);  //BB on QU
+      dSdCpix[2*(lmax+1)+l][1*ns + 2] = (-sin2aij*cos2aji*R22 + cos2aij*sin2aji*Q22);  //BB on UQ
+      dSdCpix[2*(lmax+1)+l][2*ns + 2] = ( sin2aij*sin2aji*R22 + cos2aij*cos2aji*Q22);  //BB on UU
     }
     
     if( nstokes > 2) {
       P02 = -d20[l];
-      dSdCpix[3*(lmax+1)+l][1*ns + 0] =  norm * P02*cos2aji ;  //TE on IQ
-      dSdCpix[3*(lmax+1)+l][2*ns + 0] = -norm * P02*sin2aji ;  //TE on IU
-      dSdCpix[3*(lmax+1)+l][0*ns + 1] =  norm * P02*cos2aij ;  //TE on QI
-      dSdCpix[3*(lmax+1)+l][0*ns + 2] = -norm * P02*sin2aij ;  //TE on UI
+      dSdCpix[3*(lmax+1)+l][1*ns + 0] =   P02*cos2aji ;  //TE on IQ
+      dSdCpix[3*(lmax+1)+l][2*ns + 0] = - P02*sin2aji ;  //TE on IU
+      dSdCpix[3*(lmax+1)+l][0*ns + 1] =   P02*cos2aij ;  //TE on QI
+      dSdCpix[3*(lmax+1)+l][0*ns + 2] = - P02*sin2aij ;  //TE on UI
     }
 
   }
