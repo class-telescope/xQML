@@ -14,6 +14,9 @@ The code is UNDER DEVELOPMENT !
 
 For now it is a simple python librairie.
 
+To install:
+> pip install . --prefix=$PATH
+
 To use:
 > import xqml
 
