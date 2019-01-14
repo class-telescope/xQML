@@ -10,9 +10,8 @@ This is the generalisation to cross-correlation of QML methods
 <br>
 <br>
 
-The code is UNDER DEVELOPMENT !
-
-For now it is a simple python librairie.
+The code is in python with some C routines.<br>
+But still UNDER DEVELOPMENT !
 
 To install:
 > pip install . --prefix=$PATH
