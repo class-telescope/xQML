@@ -10,7 +10,7 @@ This is the generalisation to cross-correlation of QML methods
 <br>
 <br>
 
-The code is in python with some C routines.<br>
+The code is in python with some C routines in openMP.<br>
 But still UNDER DEVELOPMENT !
 
 To install:
@@ -18,8 +18,6 @@ To install:
 
 To use:
 > import xqml
-
-We are working to externalise CPU intensive routines and use OpenMP.
 
 Librairies needed are :
 - scipy
