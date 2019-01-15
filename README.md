@@ -6,12 +6,9 @@ a quadratic Power Spectrum estimator based on cross-correlation between maps.
 This is the generalisation to cross-correlation of QML methods
 [Tegmark Physical Review D 55, 5895 (1997), Tegmark and de Oliveira-Costa, Physical Review D 64 (2001)]
 
-
-<br>
 <br>
 
 The code is in python with some C routines in openMP.<br>
-But still UNDER DEVELOPMENT !
 
 To install:
 > pip install . --prefix=$PATH
