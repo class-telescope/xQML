@@ -9,7 +9,7 @@ This is the generalisation to cross-correlation of QML methods<br>
 The code is in python with some C routines in openMP.<br>
 
 To install:
-> pip install . --prefix=$PATH
+> pip install . --prefix=my_path
 
 To use:
 > import xqml
