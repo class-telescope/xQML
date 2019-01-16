@@ -41,8 +41,8 @@ class xQML(object):
         ----------
         mask : 1D array of booleans
             Mask defining the region of interest (of value True)
-        bins : 1D array of floats
-            Bin centers or bin edges?
+        bins : 1D array of floats (nbin+1)
+            lower multipole bin
         clth : ndarray of floats
             Array containing fiducial CMB spectra (unbinned)
         lmax : int
@@ -79,14 +79,14 @@ class xQML(object):
         self.ipok = np.arange(npixtot)[self.mask]
         self.npix = len(self.ipok)
 
-        # Bin centers or edges?
+        # lower multipole bin
         self.ellbins = bins
 
         # Maximum multipole based on nside (rule of thumb to avoid aliasing)
-        self.Slmax = 2 * self.nside - 1 if lmax is None else lmax
+        self.Slmax = np.max(bins)-1 if lmax is None else lmax
 
         # Beam 2pt function (Gaussian)
-        self.bl = hp.gauss_beam(np.deg2rad(fwhm), lmax=self.Slmax+1)
+        self.bl = hp.gauss_beam(np.deg2rad(fwhm), lmax=self.Slmax)
         if bell is not None:
             self.bl = bell[:self.Slmax+1]
 
@@ -118,8 +118,9 @@ class xQML(object):
                 self.S = S
         if S is not None:
             self.S = S
-
-        self.construct_esti(NA=NA, NB=NB)
+        
+        if NA is not None:
+            self.construct_esti(NA=NA, NB=NB)
 
     def compute_dSdC( self, clth, lmax=None, timing=True, MC=False, openMP=True):
         if lmax is None:
