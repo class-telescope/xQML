@@ -1,20 +1,15 @@
 xQML
 
-a quadratic Power Spectrum estimator based on cross-correlation between maps.
-[Vanneste et al., 2018, [astro-ph/1807.02484] (https://arxiv.org/abs/1807.02484) ]
+a quadratic Power Spectrum estimator based on cross-correlation between maps.<br>
+[Vanneste et al., 2018, https://arxiv.org/abs/1807.02484]
 
-This is the generalisation to cross-correlation of QML methods
-[Tegmark Physical Review D 55, 5895 (1997), Tegmark and de Oliveira-Costa, Physical Review D 64 (2001)]
-
-
-<br>
-<br>
+This is the generalisation to cross-correlation of QML methods<br>
+[Tegmark Physical Review D 55, 5895 (1997)] & [Tegmark and de Oliveira-Costa, Physical Review D 64 (2001)]
 
 The code is in python with some C routines in openMP.<br>
-But still UNDER DEVELOPMENT !
 
 To install:
-> pip install . --prefix=$PATH
+> pip install . --prefix=my_path
 
 To use:
 > import xqml

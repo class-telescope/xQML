@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import sys
-import hooks
+#import hooks
 from distutils.core import setup, Extension
 import numpy
 from Cython.Distutils import build_ext
