@@ -16,7 +16,7 @@ import numpy as np
 import healpy as hp
 import random as rd
 
-from xqml_utils import getstokes
+from xqml_utils import getstokes, pd_inv
 
 from estimators import El
 from estimators import CovAB
@@ -149,10 +149,12 @@ class xQML(object):
         self.NB = NB if self.cross else NA
 
         # Invert (signalA + noise) matrix
-        self.invCa = linalg.inv(self.S + self.NA)
+#        self.invCa = linalg.inv(self.S + self.NA)
+        self.invCa = pd_inv(self.S + self.NA)
 
         # Invert (signalB + noise) matrix
-        self.invCb = linalg.inv(self.S + self.NB)
+#        self.invCb = linalg.inv(self.S + self.NB)
+        self.invCb = pd_inv(self.S + self.NB)
 
         # Compute E using Eq...
         self.E = El(self.invCa, self.invCb, self.Pl)
