@@ -149,10 +149,12 @@ class xQML(object):
         self.NB = NB if self.cross else NA
 
         # Invert (signalA + noise) matrix
-        self.invCa = linalg.inv(self.S + self.NA)
+#        self.invCa = linalg.inv(self.S + self.NA)
+        self.invCa = pd_inv(self.S + self.NA)
 
         # Invert (signalB + noise) matrix
-        self.invCb = linalg.inv(self.S + self.NB)
+#        self.invCb = linalg.inv(self.S + self.NB)
+        self.invCb = pd_inv(self.S + self.NB)
 
         # Compute E using Eq...
         self.E = El(self.invCa, self.invCb, self.Pl)

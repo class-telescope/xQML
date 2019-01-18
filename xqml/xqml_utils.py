@@ -9,6 +9,13 @@ import sys
 import timeit
 
 import numpy as np
+from scipy import linalg
+
+
+def pd_inv(a):
+    n = a.shape[0]
+    I = np.identity(n)
+    return linalg.solve(a, I, sym_pos = True, overwrite_b = True)
 
 
 def getstokes(spec=None, temp=False, polar=False, corr=False):
