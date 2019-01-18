@@ -13,21 +13,18 @@ from pylab import *
 import astropy.io.fits as fits
 
 import xqml
-import libcov
-import simulation
-from xqml_utils import progress_bar
-from simulation import muKarcmin2var, GetBinningMatrix
-from simulation import extrapolpixwin
+
 ion()
+show()
 
 # if __name__ == "__main__":
 
 # # Inputs
-nside = 64
-lmax = 2 * nside - 1
-Slmax = 2 * nside - 1
-dell = 10
-nsimu = 1000
+nside = 16
+lmax = 2 * nside - 3
+Slmax = 2 * nside - 3
+dell = 1
+nsimu = 100
 clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
 Clthshape = zeros(((6,)+shape(clth)[1:]))
 Clthshape[:4] = clth
@@ -51,7 +48,7 @@ pixwin = True
 ellbins = np.arange(2, lmax + 2, dell)
 ellbins[-1] = lmax + 1
 
-P, Q, ell, ellval = GetBinningMatrix(ellbins, lmax)
+P, Q, ell, ellval = xqml.simulation.GetBinningMatrix(ellbins, lmax)
 nbins = len(ellbins) - 1
 
 # Create mask
@@ -62,15 +59,17 @@ mask = np.ones(hp.nside2npix(nside), bool)
 # mask[abs(90 - rad2deg(t)) < 30] = False
 
 # # Small scale mask (do not forget to change dell)
-mask[(90 - rad2deg(t)) < 78] = False
+# mask[(90 - rad2deg(t)) < 78] = False
+
 fsky = np.mean(mask)
 print("fsky=%.2g %%" % (100*fsky))
 npix = sum(mask)
 
 fwhm = 0.5
-bl = hp.gauss_beam(deg2rad(fwhm), lmax=Slmax + 1)
+# bl = hp.gauss_beam(deg2rad(fwhm), lmax=Slmax + 1)
+bl = hp.gauss_beam(deg2rad(fwhm), lmax=Slmax)
 
-stokes, spec, istokes, ispecs = simulation.getstokes(
+stokes, spec, istokes, ispecs = xqml.xqml_utils.getstokes(
     spec=spec, polar=polar, temp=temp, corr=corr)
 print(stokes, spec, istokes, ispecs)
 nspec = len(spec)
@@ -80,13 +79,13 @@ nstoke = len(stokes)
 ip = arange(hp.nside2npix(nside))
 ipok = ip[mask]
 
-Pl, S = libcov.compute_ds_dcb(ellbins, nside, ipok, bl, clth, Slmax, spec=spec,
+Pl, S = xqml.libcov.compute_ds_dcb(ellbins, nside, ipok, bl, clth, Slmax, spec=spec,
                               pixwin=pixwin, timing=True, MC=False)
 
 # ############## Initialise xqml class ###############
 
 muKarcmin = 1.0
-pixvar = muKarcmin2var(muKarcmin, nside)
+pixvar = xqml.simulation.muKarcmin2var(muKarcmin, nside)
 varmap = ones((nstoke * npix)) * pixvar
 NoiseVar = np.diag(varmap)
 
@@ -103,7 +102,7 @@ allcla = []
 allcl = []
 # allcmb = []
 esti.construct_esti(NoiseVar, NoiseVar)
-fpixw = extrapolpixwin(nside, lmax+2, pixwin=pixwin)
+fpixw = xqml.simulation.extrapolpixwin(nside, Slmax+1, pixwin=pixwin)
 start = timeit.default_timer()
 for n in np.arange(nsimu):
     # progress_bar(n, nsimu, timeit.default_timer() - start)

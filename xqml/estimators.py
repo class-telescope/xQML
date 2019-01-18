@@ -139,9 +139,8 @@ def El(invCAA, invCBB, Pl):
     lmax = len(Pl)
     lrange = np.arange(lmax)
     npix = len(invCAA)
-    El = np.array(
-        [np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]
-        ).reshape((lmax, npix, npix))
+    # El = np.array([np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]).reshape((lmax, npix, npix))
+    El = np.array([np.linalg.multi_dot((invCAA, Pl[l], invCBB)) for l in lrange]).reshape((lmax, npix, npix))
     return El
 
 
