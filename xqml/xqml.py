@@ -16,7 +16,7 @@ import numpy as np
 import healpy as hp
 import random as rd
 
-from xqml_utils import getstokes
+from xqml_utils import getstokes, pd_inv
 
 from estimators import El
 from estimators import CovAB
