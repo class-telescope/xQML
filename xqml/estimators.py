@@ -146,7 +146,7 @@ def El(invCAA, invCBB, Pl):
 
 def CrossWindowFunction(El, Pl):
     """
-    Compute mode-mixign matrix (Tegmark's window matrix)
+    Compute mode-mixing matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
 
     Parameters
@@ -181,7 +181,7 @@ def CrossWindowFunction(El, Pl):
 
 def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     """
-    Compute mode-mixign matrix (Tegmark's window matrix)
+    Compute mode-mixing matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
 
     Parameters

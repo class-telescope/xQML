@@ -6,14 +6,16 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long
   const int lmax1 = lmax+1;
   const int ns=3, nspecall = 4;
   const int nspec = nstokes2nspec(nstokes);
-  const int npixtot = npix*nstokes;
+  const int64_t npixtot = npix*nstokes;
 
 //   fprintf( stdout, "lmax=%d\n", lmax);
 //   fprintf( stdout, "npix=%d\n", npix);
 //   fprintf( stdout, "nstokes=%d\n", nstokes);
 //   fprintf( stdout, "nspec=%d\n", nspec);
 
-  memset( dSdC, 0., (nspec*nbin*nstokes*npix*nstokes*npix) * sizeof(double));
+  int64_t ntot = nspec*nbin*npixtot*npixtot;
+//   fprintf( stdout, "memset (%d,%d,%d,%d = %lld)...\n", nspec,nbin,nstokes,npix,ntot);
+  memset( dSdC, 0., ntot * sizeof(double));
 
 #pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins)
   {
