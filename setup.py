@@ -20,7 +20,7 @@ else:
 libs = ['m']
 
 use_icc = True if '--icc' in sys.argv else False
-extra = ['-std=c99']
+extra = ['-std=gnu99']
 if use_icc:
     if USE_OPENMP:
         libs += ['gomp', 'iomp5']
