@@ -12,8 +12,8 @@ import healpy as hp
 import math
 from scipy import special
 
-from simulation import extrapolpixwin
-from xqml_utils import getstokes, progress_bar
+from .simulation import extrapolpixwin
+from .xqml_utils import getstokes, progress_bar
 
 import _libcov as clibcov
 
