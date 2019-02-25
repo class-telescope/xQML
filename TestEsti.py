@@ -20,9 +20,9 @@ show()
 # if __name__ == "__main__":
 
 # # Inputs
-nside = 16
-lmax = 2 * nside - 3
-Slmax = 2 * nside - 3
+nside = 8
+lmax = 3 * nside - 3
+Slmax = 3 * nside - 3
 dell = 1
 nsimu = 100
 clth = np.array(hp.read_cl('planck_base_planck_2015_TTlowP.fits'))
@@ -52,10 +52,17 @@ P, Q, ell, ellval = xqml.simulation.GetBinningMatrix(ellbins, lmax)
 nbins = len(ellbins) - 1
 
 # Create mask
-t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
-mask = np.ones(hp.nside2npix(nside), bool)
+mask = hp.ud_grade(hp.read_map("../Masks/mask_DX12d_galpolco_30pc_ns2048.fits"), nside)
+mask[mask > 0.5] = True
+mask[mask < 0.5] = False
+mask = np.array(mask, bool)
 
-# # Large scale mask
+# t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
+# mask = np.ones(hp.nside2npix(nside), bool)
+# import random
+# random.shuffle(mask)
+
+# Large scale mask
 # mask[abs(90 - rad2deg(t)) < 30] = False
 
 # # Small scale mask (do not forget to change dell)
@@ -101,7 +108,7 @@ Va = esti.get_covariance(cross=False)
 allcla = []
 allcl = []
 # allcmb = []
-esti.construct_esti(NoiseVar, NoiseVar)
+# esti.construct_esti(NoiseVar, NoiseVar)
 fpixw = xqml.simulation.extrapolpixwin(nside, Slmax+1, pixwin=pixwin)
 start = timeit.default_timer()
 for n in np.arange(nsimu):
@@ -145,7 +152,7 @@ semilogy()
 subplot(3, 2, 3)
 # cosmic = sqrt(2./(2 * lth + 1)) / mean(mask) * clth[ispecs][:, lth]
 # plot(lth, cosmic.transpose(), '--k')
-[plot(ellval, scl[s], '--', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
+[plot(ellval, scl[s], '--', color='C%i' % ispecs[s], label=r"$\sigma^{%s}_{\rm MC}$" %
       spec[s]) for s in np.arange(nspec)]
 [plot(ellval, sqrt(diag(V)).reshape(nspec, -1)[s], 'o', color='C%i' % ispecs[s])
     for s in np.arange(nspec)]
@@ -154,7 +161,7 @@ semilogy()
 # legend(loc=4, frameon=True)
 
 subplot(3, 2, 4)
-[plot(ellval, scla[s], ':', color='C%i' % s, label=r"$\sigma^{%s}_{\rm MC}$" %
+[plot(ellval, scla[s], '--', color='C%i' % ispecs[s], label=r"$\sigma^{%s}_{\rm MC}$" %
       spec[s]) for s in np.arange(nspec)]
 [plot(ellval, sqrt(diag(Va)).reshape(nspec, -1)[s], 'o', color='C%i' % ispecs[s])
     for s in np.arange(nspec)]
