@@ -122,7 +122,6 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     return Pl, S
 
 
-
 def compute_PlS(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax,
         spec, pixwin=True, timing=False):

@@ -150,17 +150,21 @@ class xQML(object):
 
         # Invert (signalA + noise) matrix
 #        self.invCa = linalg.inv(self.S + self.NA)
+        print("Inverting Ca")
         self.invCa = pd_inv(self.S + self.NA)
 
         # Invert (signalB + noise) matrix
 #        self.invCb = linalg.inv(self.S + self.NB)
+        print("Inverting Cb")
         self.invCb = pd_inv(self.S + self.NB)
 
         # Compute E using Eq...
+        print("Compute El")
         self.E = El(self.invCa, self.invCb, self.Pl)
         if not self.cross:
             self.bias = biasQuadEstimator(self.NA, self.E)
         # Finally compute invW by inverting...
+        print("Compute invW")
         self.invW = linalg.inv(CrossWindowFunction(self.E, self.Pl))
 
     def get_spectra(self, mapA, mapB=None):
