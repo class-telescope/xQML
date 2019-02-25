@@ -368,3 +368,55 @@ def IsInvertible(F):
 #         P *= binsnorm
 
 #     return P, Q, ell, ellval
+
+
+
+
+
+
+
+class Sym(np.ndarray):
+
+    # wrapper class for numpy array for symmetric matrices. New attribute can pack matrix to optimize storage.
+    # Usage:
+    # If you have a symmetric matrix A as a shape (n,n) numpy ndarray, Sym(A).packed is a shape (n(n+1)/2,) numpy array 
+    # that is a packed version of A.  To convert it back, just wrap the flat list in Sym().  Note that Sym(Sym(A).packed)
+
+
+    def __new__(cls, input_array):
+        obj = np.asarray(input_array).view(cls)
+
+        if len(obj.shape) == 1:
+            l = obj.copy()
+            p = obj.copy()
+            m = int((np.sqrt(8 * len(obj) + 1) - 1) / 2)
+            sqrt_m = np.sqrt(m)
+
+            if np.isclose(sqrt_m, np.round(sqrt_m)):
+                A = np.zeros((m, m))
+                for i in range(m):
+                    A[i, i:] = l[:(m-i)]
+                    A[i:, i] = l[:(m-i)]
+                    l = l[(m-i):]
+                obj = np.asarray(A).view(cls)
+                obj.packed = p
+
+            else:
+                raise ValueError('One dimensional input length must be a triangular number.')
+
+        elif len(obj.shape) == 2:
+            if obj.shape[0] != obj.shape[1]:
+                raise ValueError('Two dimensional input must be a square matrix.')
+            packed_out = []
+            for i in range(obj.shape[0]):
+                packed_out.append(obj[i, i:])
+            obj.packed = np.concatenate(packed_out)
+
+        else:
+            raise ValueError('Input array must be 1 or 2 dimensional.')
+
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None: return
+        self.packed = getattr(obj, 'packed', None)

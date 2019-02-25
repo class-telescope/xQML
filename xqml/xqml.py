@@ -18,14 +18,14 @@ import random as rd
 
 from xqml_utils import getstokes, pd_inv
 
-from estimators import El
-from estimators import CovAB
-from estimators import CrossGisherMatrix
-from estimators import CrossWindowFunction
-from estimators import yQuadEstimator, ClQuadEstimator
-from estimators import biasQuadEstimator
+from .estimators import El
+from .estimators import CovAB
+from .estimators import CrossGisherMatrix
+from .estimators import CrossWindowFunction
+from .estimators import yQuadEstimator, ClQuadEstimator
+from .estimators import biasQuadEstimator
 
-from libcov import compute_ds_dcb, S_bins_MC, compute_S, covth_bins_MC, compute_PlS, SignalCovMatrix
+from .libcov import compute_ds_dcb, S_bins_MC, compute_S, covth_bins_MC, compute_PlS, SignalCovMatrix
 
 
 __all__ = ['xQML']
