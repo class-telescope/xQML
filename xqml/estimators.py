@@ -138,8 +138,16 @@ def El(invCAA, invCBB, Pl):
 
     """
 
+<<<<<<< HEAD
     El = np.asarray([np.dot(np.dot(invCAA, symarray(P)), invCBB) for P in Pl])
 
+=======
+    lmax = len(Pl)
+    lrange = np.arange(lmax)
+    npix = len(invCAA)
+    # El = np.array([np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]).reshape((lmax, npix, npix))
+    El = np.array([np.linalg.multi_dot((invCAA, Pl[l], invCBB)) for l in lrange]).reshape((lmax, npix, npix))
+>>>>>>> 4fd1b451ce149e52585aba6331adb20ead8bcfb5
     return El
 
 

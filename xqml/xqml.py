@@ -155,11 +155,13 @@ class xQML(object):
 
         # Compute E using Eq...
         self.E = El(invCa, invCb, self.Pl)
+
         if not self.cross:
             self.bias = biasQuadEstimator(self.NA, self.E)
 
         # Finally compute invW by inverting...
 #        s0 = timeit.default_timer()
+        print("Compute invW")
         self.invW = linalg.inv(CrossWindowFunction(self.E, self.Pl))
 #        s1 = timeit.default_timer()
 #        self.invW = linalg.inv(CrossWindowFunctionLong(invCa, invCb, self.Pl))

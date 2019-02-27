@@ -68,8 +68,15 @@ lth = arange(2, lmax+1)
 
 ##############################
 # Create mask
-t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
-mask = np.ones(hp.nside2npix(nside), bool)
+mask = hp.ud_grade(hp.read_map("../Masks/mask_DX12d_galpolco_30pc_ns2048.fits"), nside)
+mask[mask > 0.5] = True
+mask[mask < 0.5] = False
+mask = np.array(mask, bool)
+
+# t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
+# mask = np.ones(hp.nside2npix(nside), bool)
+# import random
+# random.shuffle(mask)
 
 #mask[abs(90 - rad2deg(t)) < 20] = False
 mask[(90 - rad2deg(t)) < glat] = False

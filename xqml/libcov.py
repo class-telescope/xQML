@@ -142,8 +142,6 @@ def SignalCovMatrix(Pl, model, SymCompress=False):
 
 
 
-
-
 def compute_PlS(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax,
         spec, pixwin=True, timing=False):

@@ -11,17 +11,24 @@ try:
 except AttributeError:
     numpy_include = numpy.get_numpy_include()
 
+print( sys.argv)
+
 if '--disable-openmp' in sys.argv:
     sys.argv.pop(sys.argv.index('--disable-openmp'))
     USE_OPENMP = False
 else:
     USE_OPENMP = True
 
+if '--icc' in sys.argv:
+    sys.argv.pop(sys.argv.index('--icc'))
+    USE_ICC = True
+else:
+    USE_ICC = False
+
 libs = ['m']
 
-use_icc = True if '--icc' in sys.argv else False
-extra = ['-std=c99']
-if use_icc:
+extra = ['-std=gnu99']
+if USE_ICC:
     if USE_OPENMP:
         libs += ['gomp', 'iomp5']
         extra += ['-openmp']
