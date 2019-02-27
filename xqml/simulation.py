@@ -8,7 +8,6 @@ from __future__ import division
 import numpy as np
 import healpy as hp
 
-from scipy import sparse
 
 
 def muKarcmin2var(muKarcmin, nside):
@@ -97,119 +96,6 @@ def getNl(pixvar, nside, nbins):
 
 
 
-def GetBinningMatrix(
-        ellbins, lmax, norm=False, polar=True,
-        temp=False, corr=False):
-    """
-    Return P (m,n) and Q (n,m) binning matrices such that
-    Cb = P.Cl and Vbb = P.Vll.Q with m the number of bins and
-    n the number of multipoles.
-    In addition, returns ell (total non-binned multipole range)
-    and ellval (binned multipole range)
-
-    Parameters
-    ----------
-    ellbins : list of integers
-        Bins lower bound
-    lmax : int
-        Maximum multipole
-    norm : bool (default: False)
-        If True, weight the binning scheme such that P = l*(l+1)/(2*pi)
-    polar : bool
-        If True, get Stokes parameters for polar (default: True)
-    temp : bool
-        If True, get Stokes parameters for temperature (default: False)
-    corr : bool
-        If True, get Stokes parameters for EB and TB (default: False)
-
-    Returns
-    ----------
-    P : array of float (m,n)
-        Binning matrix such that Cb = P.Cl
-    Q : array of int (n,m)
-        Binning matrix such that P.Q = I
-        or P.Q = I * l(l+1)/(2pi) if norm=True
-    ell : array of int (n)
-        Multipoles range
-    ellvall : array of float (m)
-        Bins pivot range
-
-    Example
-    ----------
-    >>> bins = np.array([2.0, 5.0, 10.0])
-    >>> P, Q, ell, ellval = GetBinningMatrix(
-    ...     bins, 10.0)
-    >>> print(P) # doctest: +NORMALIZE_WHITESPACE
-    [[ 0.33333333  0.33333333  0.33333333  0.          0.          0.       0.
-       0.          0.          0.          0.          0.          0.       0.
-       0.          0.          0.          0.        ]
-     [ 0.          0.          0.          0.2         0.2         0.2      0.2
-       0.2         0.          0.          0.          0.          0.       0.
-       0.          0.          0.          0.        ]
-     [ 0.          0.          0.          0.          0.          0.       0.
-       0.          0.          0.33333333  0.33333333  0.33333333  0.       0.
-       0.          0.          0.          0.        ]
-     [ 0.          0.          0.          0.          0.          0.       0.
-       0.          0.          0.          0.          0.          0.2      0.2
-       0.2         0.2         0.2         0.        ]]
-    >>> print(Q) # doctest: +NORMALIZE_WHITESPACE
-    [[ 1.  0.  0.  0.]
-     [ 1.  0.  0.  0.]
-     [ 1.  0.  0.  0.]
-     [ 0.  1.  0.  0.]
-     [ 0.  1.  0.  0.]
-     [ 0.  1.  0.  0.]
-     [ 0.  1.  0.  0.]
-     [ 0.  1.  0.  0.]
-     [ 0.  0.  0.  0.]
-     [ 0.  0.  1.  0.]
-     [ 0.  0.  1.  0.]
-     [ 0.  0.  1.  0.]
-     [ 0.  0.  0.  1.]
-     [ 0.  0.  0.  1.]
-     [ 0.  0.  0.  1.]
-     [ 0.  0.  0.  1.]
-     [ 0.  0.  0.  1.]
-     [ 0.  0.  0.  0.]]
-    >>> print(ell)
-    [  2.   3.   4.   5.   6.   7.   8.   9.  10.  11.]
-    >>> print(ellval)
-    [ 3.  7.]
-    """
-    # ### define Stokes
-    nspec = 1
-
-    nbins = len(ellbins) - 1
-    ellmin = np.array(ellbins[0: nbins])
-    ellmax = np.array(ellbins[1: nbins + 1]) - 1
-    ell = np.arange(np.min(ellbins), lmax + 2)
-    maskl = (ell[:-1] < (lmax + 2)) & (ell[:-1] > 1)
-
-    # define min
-    minell = np.array(ellbins[0: nbins])
-    # and max of a bin
-    maxell = np.array(ellbins[1: nbins + 1]) - 1
-    ellval = (minell + maxell) * 0.5
-
-    masklm = []
-    for i in np.arange(nbins):
-        masklm.append(((ell[:-1] >= minell[i]) & (ell[:-1] <= maxell[i])))
-
-    allmasklm = nspec*[list(masklm)]
-    masklM = np.array(sparse.block_diag(allmasklm[:]).toarray())
-    binsnorm = np.array(
-        nspec * [list(np.arange(minell[0], np.max(ellbins)))]).flatten()
-
-    binsnorm = binsnorm*(binsnorm+1)/2./np.pi
-    P = np.array(masklM)*1.
-    Q = P.T
-    P = P / np.sum(P, 1)[:, None]
-    if norm:
-        P *= binsnorm
-
-    return P, Q, ell, ellval
-
-
 def extrapolpixwin(nside, Slmax, pixwin=True):
     '''
     Parameters
@@ -232,23 +118,25 @@ def extrapolpixwin(nside, Slmax, pixwin=True):
     [ 1.          0.977303    0.93310702  0.86971852  0.79038278  0.69905215
       0.60011811  0.49813949  0.39760902]
     >>> print(extrapolpixwin(2, 20, True))
-    [ 1.          0.977303    0.93310702  0.86971852  0.79038278  0.69905215
-      0.60011811  0.49813949  0.39760902  0.30702636  0.22743277  0.16147253
-      0.10961864  0.07098755  0.04374858  0.02559774  0.01418623  0.00742903
-      0.00366749  0.00170274]
+    [  1.00000000e+00   9.77303000e-01   9.33107017e-01   8.69718524e-01
+       7.90382779e-01   6.99052151e-01   6.00118114e-01   4.98139486e-01
+       3.97609016e-01   3.07026358e-01   2.27432772e-01   1.61472532e-01
+       1.09618639e-01   7.09875545e-02   4.37485835e-02   2.55977424e-02
+       1.41862346e-02   7.42903370e-03   3.66749182e-03   1.70274467e-03
+       7.41729191e-04]
     >>> print(extrapolpixwin(2, 20, False))
     [ 1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.
-      1.  1.]
+      1.  1.  1.]
     '''
     if pixwin:
         prepixwin = np.array(hp.pixwin(nside))
         poly = np.polyfit(np.arange(len(prepixwin)), np.log(prepixwin),
                           deg=3, w=np.sqrt(prepixwin))
-        y_int = np.polyval(poly, np.arange(Slmax))
+        y_int = np.polyval(poly, np.arange(Slmax+1))
         fpixwin = np.exp(y_int)
-        fpixwin = np.append(prepixwin, fpixwin[len(prepixwin):])[: Slmax]
+        fpixwin = np.append(prepixwin, fpixwin[len(prepixwin):])[:Slmax+1]
     else:
-        fpixwin = np.ones((Slmax))
+        fpixwin = np.ones((Slmax+1))
 
     return fpixwin
 

@@ -7,6 +7,8 @@ from __future__ import division
 
 import numpy as np
 
+from .xqml_utils import symarray
+
 
 def Pl(ds_dcb):
     """
@@ -136,12 +138,8 @@ def El(invCAA, invCBB, Pl):
 
     """
 
-    lmax = len(Pl)
-    lrange = np.arange(lmax)
-    npix = len(invCAA)
-    El = np.array(
-        [np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]
-        ).reshape((lmax, npix, npix))
+    El = np.asarray([np.dot(np.dot(invCAA, symarray(P)), invCBB) for P in Pl])
+
     return El
 
 
@@ -149,14 +147,14 @@ def CrossWindowFunction(El, Pl):
     """
     Compute mode-mixing matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
-
+    
     Parameters
     ----------
     El : ndarray of floats
         Quadratic parameter matrices such that yl = dA.El.dB.T
     Pl : ndarray of floats
         Rescaled normalize Legendre polynomials dS/dCl
-
+    
     Returns
     ----------
     Wll : 2D square matrix array of floats
@@ -171,12 +169,13 @@ def CrossWindowFunction(El, Pl):
      [110 390 670]
      [134 478 822]]
     """
-    lmax = len(El)
-    lrange = np.arange((lmax))
+    nl = len(El)
+
     # pas de transpose car symm
-    Wll = np.array(
-        [np.sum(El[il] * Pl[jl]) for il in lrange for jl in lrange]
-        ).reshape(lmax, lmax)
+    Wll = np.asarray(
+        [np.sum(E * symarray(P)) for E in El for P in Pl]
+        ).reshape(nl,nl)
+
     return Wll
 
 
@@ -212,9 +211,9 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     lmax = len(Pl)
     lrange = np.arange((lmax))
     # Pas de transpose car symm
-    Wll = np.array(
-        [np.sum(np.dot(np.dot(invCAA, Pl[il]), invCBB) * Pl[jl])
-         for il in lrange for jl in lrange]).reshape(lmax, lmax)
+    Wll = np.asarray(
+        [np.sum(np.dot(np.dot(invCAA, symarray(Pi)), invCBB) * symarray(Pj)) for Pi in Pl for Pj in Pl]
+        ).reshape(lmax, lmax)
     return Wll
 
 
@@ -242,12 +241,12 @@ def CrossGisherMatrix(El, CAB):
      [ 701 2205 3709]
      [1181 3709 6237]]
     """
-    lmax = len(El)
-    lrange = np.arange(lmax)
-    El_CAB = np.array([np.dot(CAB, El[il]) for il in lrange])
-    GAB = np.array(
-        [np.sum(El_CAB[il] * El_CAB[jl].T) for il in lrange for jl in lrange]
-        ).reshape(lmax, lmax)
+    nl = len(El)
+
+    El_CAB = np.asarray([np.dot(CAB, E) for E in El])
+    GAB = np.asarray(
+        [np.sum(Ei * Ej.T) for Ei in El_CAB for Ej in El_CAB]
+        ).reshape(nl,nl)
     return GAB
 
 
@@ -278,7 +277,7 @@ def CrossGisherMatrixLong(El, CAB):
     """
     lmax = len(El)
     lrange = np.arange(lmax)
-    GAB = np.array(
+    GAB = np.asarray(
         [np.sum(np.dot(CAB, El[il]) * np.dot(CAB, El[jl]).T)
          for il in lrange for jl in lrange]).reshape(lmax, lmax)
     return GAB
@@ -305,9 +304,7 @@ def yQuadEstimator(dA, dB, El):
     >>> print(yQuadEstimator(dA, dB, El))
     [1360788 3356628 5352468]
     """
-    npix = len(dA)
-    lrange = np.arange((len(El)))
-    y = np.array([dA.dot(El[l]).dot(dB) for l in lrange])
+    y = np.asarray([dA.dot(E).dot(dB) for E in El])
     return y
 
 
@@ -349,27 +346,8 @@ def biasQuadEstimator(NoiseN, El):
     ----------
     ???
     """
-    lrange = np.arange((len(El)))
-    return np.array([np.sum(NoiseN * El[l]) for l in lrange])
 
-
-# def blEstimatorFlat(NoiseN, El):
-#     """
-#     Compute bias term bl such that Cl = Fll^-1 . ( yl + bl)
-#     Not to be confonded with beam function bl(fwhm)
-
-#     Parameters
-#     ----------
-#     NoiseN : ???
-#         ???
-
-#     Returns
-#     ----------
-#     ???
-#     """
-#     lrange = np.arange((len(El)))
-
-#     return np.array([np.sum(NoiseN * np.diag(El[l])) for l in lrange])
+    return np.asarray([np.sum(NoiseN * E) for E in El])
 
 
 def CovAB(invWll, GAB):
@@ -398,39 +376,11 @@ def CovAB(invWll, GAB):
     return covAB
 
 
-# def GetCorr(F):
-#     """
-#     Return correlation of covariance matrix
-#     corr(F) = F[i, j] / sqrt(F[i, i]*F[j, j])
-
-#     Parameters
-#     ----------
-#     F : 2D square matrix array (n,n)
-#         Covariance matrix
-
-#     Returns
-#     ----------
-#     Corr : 2D square matrix array (n,n)
-#         Correlation matrix from F
-
-#     Example
-#     ----------
-#     >>> CorrF = GetCorr(np.matrix('1 .5; .5 4'))
-#     >>> print(CorrF) # doctest: +NORMALIZE_WHITESPACE
-#     [[ 1.    0.25]
-#      [ 0.25  1.  ]]
-#     """
-#     nbins = len(F)
-#     Corr = np.array(
-#         [F[i, j] / (F[i, i]*F[j, j])**.5 for i in np.arange(nbins)
-#             for j in np.arange(nbins)]).reshape(nbins, nbins)
-#     return Corr
-
 if __name__ == "__main__":
     """
     Run the doctest using
 
-    python simulation.py
+    python estimators.py
 
     If the tests are OK, the script should exit gracefuly, otherwise the
     failure(s) will be printed out.

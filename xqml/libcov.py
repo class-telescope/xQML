@@ -12,14 +12,14 @@ import healpy as hp
 import math
 from scipy import special
 
-from simulation import extrapolpixwin
-from xqml_utils import getstokes, progress_bar
+from .simulation import extrapolpixwin
+from .xqml_utils import getstokes, progress_bar, symarray, GetBinningMatrix
 
 import _libcov as clibcov
 
 
 def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
-                    pixwin=False, timing=False, MC=0, Sonly=False, openMP=True):
+                    pixwin=False, timing=False, MC=0, Sonly=False, openMP=True, SymCompress=False):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -63,12 +63,12 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     Example
     ----------
     >>> Pl, S = compute_ds_dcb(
-    ... np.array([2,4,5,8]), 2, np.array([0,1,4,10,11]), np.arange(10),
-    ... clth=np.arange(60).reshape(6,-1), Slmax=8,
+    ... np.array([2,4,5,10]), 2, np.array([0,1,4,10,11]), np.arange(10),
+    ... clth=np.arange(60).reshape(6,-1), Slmax=9,
     ... spec=["TT", "EE", "BB", "TE", "EB", "TB"],
     ... pixwin=True, timing=False, MC=0, Sonly=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (1128.61613, 29501.83265)
+    (1149.18805, 23675.10206)
     """
     if Slmax < ellbins[-1]-1:
         print("WARNING : Slmax < lmax")
@@ -102,24 +102,45 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
             ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
             polar=polar, temp=temp, corr=corr, pixwin=pixwin, timing=timing)
     elif openMP:
-        fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
+        fpixwin = extrapolpixwin(nside, Slmax, pixwin)
         bell = np.array([bl*fpixwin]*4)[:Slmax+1].ravel()
         stokes, spec, istokes, ispecs = getstokes(spec)
         nbins = (len(ellbins)-1)*len(spec)
         npix = len(ipok)*len(istokes)
         Pl = np.ndarray( nbins*npix**2)
-##         print( "size dSdC: %d" % len(Pl))
         clibcov.dSdC( nside, len(istokes), ellbins, ipok, bell, Pl)
         Pl = Pl.reshape( nbins, npix, npix)
-        S = SignalCovMatrix(Pl,clth[ispecs][:,2:int(ellbins[-1])].ravel())
+        P, Q, ell, ellval = GetBinningMatrix(ellbins, Slmax)
+        S = SignalCovMatrix(Pl,np.array([P.dot(clth[isp,2:int(ellbins[-1])]) for isp in ispecs]).ravel())
     else:
         Pl, S = compute_PlS(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
             spec=spec, pixwin=pixwin, timing=timing)
 
-    print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))
+    #print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))
 
+    if SymCompress:
+        Pl = np.array([symarray(P).packed for P in Pl])
+        
     return Pl, S
+
+
+
+
+def SignalCovMatrix(Pl, model, SymCompress=False):
+    """
+    Compute correlation matrix S = sum_l Pl*Cl
+    
+    Parameters
+    ----------
+    clth : ndarray of floats
+    Array containing fiducial CMB spectra (unbinned).
+    """
+    # Return scalar product btw Pl and the fiducial spectra.
+    return np.sum([symarray(P) for P in Pl] * model[:, None, None], 0)
+
+
+
 
 
 
@@ -162,20 +183,19 @@ def compute_PlS(
 
     Example
     ----------
-    >>> Pl, S = compute_PlS(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+    >>> Pl, S = compute_PlS(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
     ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, timing=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (14.38023, -4125.5419)
+    (-429.8591, -17502.8982)
 
-
-    >>> Pl, S = compute_PlS(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+    >>> Pl, S = compute_PlS(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
     ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, timing=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
-    (17.44139, 3086.13152)
+    (-756.35517, -31333.69722)
     """
 
     lmax = ellbins[-1]
@@ -205,7 +225,7 @@ def compute_PlS(
 
     rpix = np.array(hp.pix2vec(nside, ipok))
     ll = np.arange(Slmax+1)
-    fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
+    fpixwin = extrapolpixwin(nside, Slmax, pixwin)
     norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+1]**2)
     clthn = clth[:, 2: Slmax+1]
     masks = []
@@ -417,20 +437,19 @@ def compute_S(
 
     Example
     ----------
-    >>> S = compute_S(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
-    ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    >>> S = compute_S(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
+    ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(10),
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
     ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, timing=False)
     >>> print(round(np.sum(S),5))
-    -4125.5419
+    -17502.8982
 
-
-    >>> S = compute_S(np.array([2,3,4,7]),4,ipok=np.array([0,1,3]),
+    >>> S = compute_S(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
-    ... clth=np.arange(6*13).reshape(6,-1), Slmax=11,
+    ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
     ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, timing=False)
     >>> print(round(np.sum(S),5))
-    3086.13152
+    -31333.69722
     """
 
     lmax = ellbins[-1]
@@ -460,8 +479,8 @@ def compute_S(
 
     rpix = np.array(hp.pix2vec(nside, ipok))
     ll = np.arange(Slmax+1)
-    fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
-    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:]**2)*(bl[2:Slmax+1]**2)
+    fpixwin = extrapolpixwin(nside, Slmax, pixwin)
+    norm = (2*ll[2:]+1)/(4.*np.pi)*(fpixwin[2:Slmax+1]**2)*(bl[2:Slmax+1]**2)
     clthn = clth[:, 2: Slmax+1]
     S = np.zeros((nsto*npi, nsto*npi))
 
@@ -471,7 +490,7 @@ def compute_S(
             progress_bar(i, npi, -0.25 * (start-timeit.default_timer()))
         for j in np.arange(i, npi):
             if temp:
-                pl = norm*pl0(allcosang[i, j], Slmax)
+                pl = norm*pl0(allcosang[i, j], Slmax)[2:]
                 elem = np.sum((pl * clthn[0]))
                 S[i, j] = elem
                 S[j, i] = elem
@@ -628,7 +647,7 @@ def covth_bins_MC(
     Stokes, spec, istokes, ispecs = getstokes(polar=polar, temp=temp, corr=corr)
     nspec = len(spec)
     ll = np.arange(Slmax+1)
-    fpixwin = extrapolpixwin(nside, Slmax+1, pixwin)
+    fpixwin = extrapolpixwin(nside, Slmax, pixwin)
     masks = []
     for i in np.arange(nbins):
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
@@ -765,14 +784,14 @@ def S_bins_MC(
     Stokes, spec, ind = getstokes(polar=polar, temp=temp, corr=corr)
     nspec = len(spec)
     ll = np.arange(Slmax + 2)
-    fpixwin = extrapolpixwin(nside, Slmax+2, pixwin)
+    fpixwin = extrapolpixwin(nside, Slmax, pixwin)
     masks = []
     for i in np.arange(nbins):
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
     masks = np.array(masks)
     npix = len(ipok)
     start = timeit.default_timer()
-    norm = bl[0: Slmax + 2]**2 * fpixwin[0: Slmax + 2]**2
+    norm = bl[0: Slmax + 1]**2 * fpixwin[0: Slmax + 1]**2
 
     if polar:
         ClthOne = np.zeros((nspec * (nbins), 6, (Slmax + 2)))
@@ -1111,26 +1130,11 @@ def F2l2(z, lmax):
 
 
 
-def SignalCovMatrix(Pl, model):
-    """
-    Compute correlation matrix S = sum_l Pl*Cl
-    
-    Parameters
-    ----------
-    clth : ndarray of floats
-    Array containing fiducial CMB spectra (unbinned).
-    """
-    # Return scalar product btw Pl and the fiducial spectra.
-    return np.sum(Pl * model[:, None, None], 0)
-#        return( np.dot(np.transpose(self.Pl),model))
-
-
-
 if __name__ == "__main__":
     """
     Run the doctest using
 
-    python simulation.py'
+    python libcov.py'
 
     If the tests are OK, the script should exit gracefuly, otherwise the
     failure(s) will be printed out.
