@@ -156,23 +156,14 @@ class xQML(object):
         # Compute E using Eq...
         self.El = El(invCa, invCb, self.Pl)
 
+        # Finally compute invW by inverting...
+        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl))
+
+        # Compute bias for auto
 #        if not self.cross:
 #            self.bias = biasQuadEstimator(self.NA, self.El)
         self.bias = biasQuadEstimator(self.NA, self.El)
 
-        # Finally compute invW by inverting...
-#        s0 = timeit.default_timer()
-        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl))
-#        s1 = timeit.default_timer()
-#        self.invW = linalg.inv(CrossWindowFunctionLong(invCa, invCb, self.Pl))
-#        s2 = timeit.default_timer()
-#        print( "CrossWindowFunction: %d sec" % (s1-s0))
-#        print( "CrossWindowFunctionLong: %d sec" % (s2-s1))
-
-        #Clean
-        del(self.Pl)
-        del(invCa)
-        del(invCb)
 
     def get_spectra(self, mapA, mapB=None):
         """

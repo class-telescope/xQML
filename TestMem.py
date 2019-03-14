@@ -29,7 +29,7 @@ if len(sys.argv) > 1:
 if exp == "Big":
     nside = 16
     dell = 1
-    glat = 20
+    glat = 10
 elif exp == "Small":
     nside = 64
     dell = 10
@@ -86,7 +86,7 @@ npix = sum(mask)
 print("fsky=%.2g %% (npix=%d)" % (100*fsky,npix))
 toGB = 1024. * 1024. * 1024.
 emem = 8.*(npix*2*npix*2) * ( len(lth)*2 ) / toGB
-print("mem=%.2g Gb" % emem)
+print("mem=%.2g Gb" % 2.*emem)
 ##############################
 
 
@@ -109,7 +109,7 @@ noise = (randn(len(varmap)) * varmap**0.5).reshape(nstoke, -1)
 # ############## Initialise xqml class ###############
 esti = xqml.xQML(mask, ellbins, clth, lmax=lmax, fwhm=fwhm, spec=spec)
 s1 = timeit.default_timer()
-print( "Init: %d sec (%d)" % (s1-s0,s1-s0))
+print( "Init: %.2f sec (%.2f)" % (s1-s0,s1-s0))
 
 esti.NA = NoiseVar
 esti.NB = NoiseVar
@@ -117,39 +117,63 @@ esti.NB = NoiseVar
 invCa = xqml.xqml_utils.pd_inv(esti.S + esti.NA)
 invCb = xqml.xqml_utils.pd_inv(esti.S + esti.NB)
 s2 = timeit.default_timer()
-print( "Inv C: %d sec (%d)" % (s2-s0,s2-s1))
+print( "Inv C: %.2f sec (%.2f)" % (s2-s0,s2-s1))
 s1 = s2
 
-esti.El = xqml.estimators.El(invCa, invCb, esti.Pl)
-s2 = timeit.default_timer()
-print( "Construct El: %d sec (%d)" % (s2-s0,s2-s1))
-s1 = s2
+meth = "classic"
+#meth = "long"
 
-#esti.bias = xqml.estimators.biasQuadEstimator(esti.NA, esti.El)
-#s2 = timeit.default_timer()
-#print( "Construct bias: %d sec (%d)" % (s2-s0,s2-s1))
-#s1 = s2
+if meth == "classic":
+    esti.El = xqml.estimators.El(invCa, invCb, esti.Pl)
+    s2 = timeit.default_timer()
+    print( "Construct El: %.2f sec (%.2f)" % (s2-s0,s2-s1))
+    s1 = s2
 
-#Wll = xqml.estimators.CrossWindowFunction(esti.El, esti.Pl)
-nl = len(esti.El)
-#Wll = np.asarray( [np.sum(E * P) for E in esti.El for P in esti.Pl] ).reshape(nl,nl)
-Wll = np.zeros((nl,nl))
-for l1 in range(nl):
-    for l2 in range(nl):
-        Wll[l1,l2] = np.sum( esti.El[l1] * esti.Pl[l2])
-s2 = timeit.default_timer()
-print( "Construct W: %d sec (%d)" % (s2-s0,s2-s1))
-s1=s2
+    Wll = xqml.estimators.CrossWindowFunction(esti.El, esti.Pl)
+#    nl = len(esti.El)
+#    Wll = np.asarray( [np.sum(E * P) for E in esti.El for P in esti.Pl] ).reshape(nl,nl)
+    s2 = timeit.default_timer()
+    print( "Construct W: %.2f sec (%.2f)" % (s2-s0,s2-s1))
+    s1=s2
+    esti.Pl = 0.
+
+    esti.bias = xqml.estimators.biasQuadEstimator(esti.NA, esti.El)
+    s2 = timeit.default_timer()
+    print( "Construct bias: %.2f sec (%.2f)" % (s2-s0,s2-s1))
+    s1 = s2
+
+else:
+    nl = len(esti.Pl)
+    CaPl = [np.dot(invCa, P) for P in esti.Pl]
+    CbPl = [np.dot(invCb, P) for P in esti.Pl]
+    esti.Pl = 0
+    Wll = np.asarray([np.sum(CaP * CbP) for CaP in CaPl for CbP in CbPl]).reshape(nl,nl)
+    s2 = timeit.default_timer()
+    print( "Construct Wll: %.2f sec (%.2f)" % (s2-s0,s2-s1))
+    s1 = s2
+    CbPl = 0
+
+    esti.El = [np.dot(CaP, invCb) for CaP in CaPl]
+#    esti.El = xqml.estimators.El(invCa, invCb, esti.Pl)
+    s2 = timeit.default_timer()
+    print( "Construct El: %.2f sec (%.2f)" % (s2-s0,s2-s1))
+    s1 = s2
+    CaPl =0
+
+    esti.bias = xqml.estimators.biasQuadEstimator(esti.NA, esti.El)
+    s2 = timeit.default_timer()
+    print( "Construct bias: %.2f sec (%.2f)" % (s2-s0,s2-s1))
+    s1 = s2
+
 
 esti.invW = linalg.inv(Wll)
 s2 = timeit.default_timer()
-print( "inv W: %d sec (%d)" % (s2-s0,s2-s1))
+print( "inv W: %.2f sec (%.2f)" % (s2-s0,s2-s1))
 s1=s2
 
 #esti.construct_esti( NA=NoiseVar, NB=NoiseVar)
-
-s2 = timeit.default_timer()
-print( "Construct esti: %d sec (%d)" % (s2-s0,s2-s1))
+#s2 = timeit.default_timer()
+#print( "Construct esti: %.2f sec (%.2f)" % (s2-s0,s2-s1))
 ellval = esti.lbin()
 
 
@@ -171,7 +195,7 @@ for n in np.arange(nsimu):
     t.append( timeit.default_timer() - s1)
     allcla.append(esti.get_spectra(dmA))
 
-print( "get_spectra: %d (%d sec)" % (timeit.default_timer()-s0,mean(t)))
+print( "get_spectra: %.2f (%.2f sec)" % (timeit.default_timer()-s0,mean(t)))
 hcl = mean(allcl, 0)
 scl = std(allcl, 0)
 hcla = mean(allcla, 0)

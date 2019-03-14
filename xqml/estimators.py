@@ -136,7 +136,7 @@ def El(invCAA, invCBB, Pl):
 
     """
 
-    El = np.asarray([np.dot(np.dot(invCAA, P), invCBB) for P in Pl])
+    El = [np.dot(np.dot(invCAA, P), invCBB) for P in Pl]
 
     return El
 
@@ -239,10 +239,9 @@ def CrossGisherMatrix(El, CAB):
     """
     nl = len(El)
 
-    El_CAB = np.asarray([np.dot(CAB, E) for E in El])
-    GAB = np.asarray(
-        [np.sum(Ei * Ej.T) for Ei in El_CAB for Ej in El_CAB]
-        ).reshape(nl,nl)
+    El_CAB = [np.dot(CAB, E) for E in El]
+    GAB = np.asarray([np.sum(Ei * Ej.T) for Ei in El_CAB for Ej in El_CAB]).reshape(nl,nl)
+    
     return GAB
 
 
@@ -343,7 +342,7 @@ def biasQuadEstimator(NoiseN, El):
     ???
     """
 
-    return np.asarray([np.sum(NoiseN * E) for E in El])
+    return [np.sum(NoiseN * E) for E in El]
 
 
 def CovAB(invWll, GAB):

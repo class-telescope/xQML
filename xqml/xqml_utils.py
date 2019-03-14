@@ -90,7 +90,7 @@ def getstokes(spec=None, temp=False, polar=False, corr=False):
     return stokes, speclist, istokes, ispecs
 
 
-def ComputeSizeDs_dcb(nside, fsky, deltal=1):
+def ComputeSizeDs_dcb(nside, fsky, deltal=1, unit="Gb"):
     """
     ???
 
@@ -103,10 +103,18 @@ def ComputeSizeDs_dcb(nside, fsky, deltal=1):
     ----------
     ???
     """
-    toGB = 1024. * 1024. * 1024.
-    sizeds_dcb = (2*12*nside**2*fsky)**2*8*2*(3.*nside/deltal) / toGB
-    print("size (Gb) = " + str(sizeds_dcb))
-    print("possible reduced size (Gb) = " + str(sizeds_dcb/4))
+    if units[0].lower() == "g":
+        toGB = 1024. * 1024. * 1024.
+    else:
+        toGB = 1.
+
+    nspec = 2
+    nell = nspec * (3.*nside-1) /deltal
+    npixtot = 2*12*nside**2*fsky
+    sizeds_dcb = (npixtot)**2 * (nell + 5)
+
+    return( 8.* sizeds_dcb / toGB)
+#    print("size (Gb) = " + str(sizeds_dcb))
 
 
 def get_colors(num_colors):
