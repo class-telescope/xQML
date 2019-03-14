@@ -7,8 +7,6 @@ from __future__ import division
 
 import numpy as np
 
-from .xqml_utils import symarray
-
 
 def Pl(ds_dcb):
     """
@@ -138,16 +136,8 @@ def El(invCAA, invCBB, Pl):
 
     """
 
-<<<<<<< HEAD
-    El = np.asarray([np.dot(np.dot(invCAA, symarray(P)), invCBB) for P in Pl])
+    El = np.asarray([np.dot(np.dot(invCAA, P), invCBB) for P in Pl])
 
-=======
-    lmax = len(Pl)
-    lrange = np.arange(lmax)
-    npix = len(invCAA)
-    # El = np.array([np.dot(np.dot(invCAA, Pl[l]), invCBB) for l in lrange]).reshape((lmax, npix, npix))
-    El = np.array([np.linalg.multi_dot((invCAA, Pl[l], invCBB)) for l in lrange]).reshape((lmax, npix, npix))
->>>>>>> 4fd1b451ce149e52585aba6331adb20ead8bcfb5
     return El
 
 
@@ -180,9 +170,7 @@ def CrossWindowFunction(El, Pl):
     nl = len(El)
 
     # pas de transpose car symm
-    Wll = np.asarray(
-        [np.sum(E * symarray(P)) for E in El for P in Pl]
-        ).reshape(nl,nl)
+    Wll = np.asarray( [np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
 
     return Wll
 
@@ -220,7 +208,7 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     lrange = np.arange((lmax))
     # Pas de transpose car symm
     Wll = np.asarray(
-        [np.sum(np.dot(np.dot(invCAA, symarray(Pi)), invCBB) * symarray(Pj)) for Pi in Pl for Pj in Pl]
+        [np.sum(np.dot(np.dot(invCAA, Pi), invCBB) * Pj) for Pi in Pl for Pj in Pl]
         ).reshape(lmax, lmax)
     return Wll
 

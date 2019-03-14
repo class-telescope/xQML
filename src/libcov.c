@@ -1,5 +1,26 @@
 #include "libcov.h"
 
+// void CrossWindowFunction( int nl, int npix, double* El, double* Pl, double* Wll)
+// {
+
+//   memset( Wll, 0., nl*nl * sizeof(double));
+
+// #pragma omp parallel default(none) shared(nl, El, Pl, Wll)
+//   {
+// #pragma omp for schedule(dynamic)
+//     for( int l1=0; l1<nl; l1++) {
+//       for( int l2=0; l2<nl; l2++) {
+	
+// 	for( int p=0; p<npix*npix; p++)
+// 	  Wll[l1*nl+l2] += El[l1][
+//       }
+//     }
+
+//   }
+  
+// }
+
+
 void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long *ipix, double *bl, double* dSdC)
 {
   const int lmax=ellbins[nbin]-1;

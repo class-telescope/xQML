@@ -68,22 +68,23 @@ lth = arange(2, lmax+1)
 
 ##############################
 # Create mask
-mask = hp.ud_grade(hp.read_map("../Masks/mask_DX12d_galpolco_30pc_ns2048.fits"), nside)
-mask[mask > 0.5] = True
-mask[mask < 0.5] = False
-mask = np.array(mask, bool)
 
-# t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
-# mask = np.ones(hp.nside2npix(nside), bool)
+t, p = hp.pix2ang(nside, range(hp.nside2npix(nside)))
+mask = np.ones(hp.nside2npix(nside), bool)
 # import random
 # random.shuffle(mask)
 
-#mask[abs(90 - rad2deg(t)) < 20] = False
-mask[(90 - rad2deg(t)) < glat] = False
+if exp == "Big":
+    mask[abs(90 - rad2deg(t)) < glat] = False
+elif exp == "Small":
+    mask[(90 - rad2deg(t)) < glat] = False
 
 fsky = np.mean(mask)
-print("fsky=%.2g %%" % (100*fsky))
 npix = sum(mask)
+print("fsky=%.2g %% (npix=%d)" % (100*fsky,npix))
+toGB = 1024. * 1024. * 1024.
+emem = 8.*(npix*2*npix*2) * ( len(lth)*2 ) / toGB
+print("mem=%.2g Gb" % emem)
 ##############################
 
 
@@ -105,16 +106,16 @@ noise = (randn(len(varmap)) * varmap**0.5).reshape(nstoke, -1)
 
 # ############## Initialise xqml class ###############
 start = timeit.default_timer()
-esti = xqml.xQML(mask, ellbins, clth, NA=NoiseVar, NB=NoiseVar, lmax=lmax, fwhm=fwhm, spec=spec, SymCompress=True)
+esti = xqml.xQML(mask, ellbins, clth, NA=NoiseVar, NB=NoiseVar, lmax=lmax, fwhm=fwhm, spec=spec)
 s1 = timeit.default_timer()
 print( "Init: %d sec" % (s1-start))
-s2 = timeit.default_timer()
-print( "construct_esti: %d sec" % (s2-s1))
 ellval = esti.lbin()
 
 # ############## Compute Analytical variance ###############
 V  = esti.get_covariance(cross=True )
 Va = esti.get_covariance(cross=False)
+s2 = timeit.default_timer()
+print( "construct covariance: %d sec" % (s2-s1))
 
 
 # ############## Construct MC ###############

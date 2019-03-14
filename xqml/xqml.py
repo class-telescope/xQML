@@ -35,7 +35,7 @@ class xQML(object):
     """ Main class to handle the spectrum estimation """
     def __init__( self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
                   S=None, fwhm=0., bell=None, spec=None, temp=False, polar=True, corr=False,
-                  pixwin=True, SymCompress=False):
+                  pixwin=True):
         """
         Parameters
         ----------
@@ -108,7 +108,7 @@ class xQML(object):
             self.Pl, self.S = compute_ds_dcb(
                 self.ellbins, self.nside, self.ipok,
                 self.bl, clth, self.Slmax,
-                self.spec, pixwin=self.pixwin, timing=True, MC=False, openMP=True, SymCompress=SymCompress)
+                self.spec, pixwin=self.pixwin, timing=True, MC=False, openMP=True)
         else:
             self.Pl = Pl
             if S is None:
@@ -121,12 +121,12 @@ class xQML(object):
         if NA is not None:
             self.construct_esti(NA=NA, NB=NB)
 
-    def compute_dSdC( self, clth, lmax=None, timing=True, MC=False, openMP=True, SymCompress=True):
+    def compute_dSdC( self, clth, lmax=None, timing=True, MC=False, openMP=True):
         if lmax is None:
             lmax = 2*self.nside-1   #Why ?
         
         self.Pl, self.S = compute_ds_dcb( self.ellbins, self.nside, self.ipok, self.bl, clth, lmax,
-                                          self.spec, pixwin=self.pixwin, timing=timing, MC=MC, openMP=openMP, SymCompress=SymCompress)
+                                          self.spec, pixwin=self.pixwin, timing=timing, MC=MC, openMP=openMP)
         return( self.Pl, self.S)
 
     def construct_esti(self, NA, NB=None):
@@ -154,21 +154,25 @@ class xQML(object):
         invCb = pd_inv(self.S + self.NB)
 
         # Compute E using Eq...
-        self.E = El(invCa, invCb, self.Pl)
+        self.El = El(invCa, invCb, self.Pl)
 
-        if not self.cross:
-            self.bias = biasQuadEstimator(self.NA, self.E)
+#        if not self.cross:
+#            self.bias = biasQuadEstimator(self.NA, self.El)
+        self.bias = biasQuadEstimator(self.NA, self.El)
 
         # Finally compute invW by inverting...
 #        s0 = timeit.default_timer()
-        print("Compute invW")
-        self.invW = linalg.inv(CrossWindowFunction(self.E, self.Pl))
+        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl))
 #        s1 = timeit.default_timer()
 #        self.invW = linalg.inv(CrossWindowFunctionLong(invCa, invCb, self.Pl))
 #        s2 = timeit.default_timer()
 #        print( "CrossWindowFunction: %d sec" % (s1-s0))
 #        print( "CrossWindowFunctionLong: %d sec" % (s2-s1))
+
+        #Clean
         del(self.Pl)
+        del(invCa)
+        del(invCb)
 
     def get_spectra(self, mapA, mapB=None):
         """
@@ -195,12 +199,10 @@ class xQML(object):
             cond_sizeB = np.size(mapB) == self.nstokes * self.npix
             dB = mapB if cond_sizeB else mapB[self.istokes][:,self.mask]
 
-            yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.E)
+            yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
             cl = ClQuadEstimator(self.invW, yl)
         else:
-            if self.bias is None:
-                self.bias = biasQuadEstimator(self.NA, self.E)
-            yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.E) - self.bias
+            yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
             cl = ClQuadEstimator(self.invW, yl)
 
         # Return the reshaped set of cls
@@ -220,9 +222,9 @@ class xQML(object):
         # # Do Gll' = S^-1.El.S^-1.El'
         cross = self.cross if cross is None else cross
         if cross:
-            G = CrossGisherMatrix(self.E, self.S)
+            G = CrossGisherMatrix(self.El, self.S)
         else:
-            G = CrossGisherMatrix(self.E, self.S + self.NA)
+            G = CrossGisherMatrix(self.El, self.S + self.NA)
 
         # # Do V = W^-1.G.W^-1 + W^-1
         V = CovAB(self.invW, G)

@@ -383,7 +383,7 @@ class symarray(np.ndarray):
                 m = int(m)
             else:
                 raise ValueError('One dimensional input length must be a triangular number.')
-
+            
             A = np.zeros((m, m))
             for i in range(m):
                 A[i, i:] = l[:(m-i)]
@@ -391,8 +391,8 @@ class symarray(np.ndarray):
                 l = l[(m-i):]
             obj = np.asarray(A).view(cls)
             obj.packed = p
-
-
+        
+        
         elif len(obj.shape) == 2:
             if obj.shape[0] != obj.shape[1]:
                 raise ValueError('Two dimensional input must be a square matrix.')
@@ -400,12 +400,12 @@ class symarray(np.ndarray):
             for i in range(obj.shape[0]):
                 packed_out.append(obj[i, i:])
             obj.packed = np.concatenate(packed_out)
-
+        
         else:
             raise ValueError('Input array must be 1 or 2 dimensional.')
-
+        
         return obj
-
+    
     def __array_finalize__(self, obj):
         if obj is None: return
         self.packed = getattr(obj, 'packed', None)

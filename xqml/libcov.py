@@ -13,13 +13,13 @@ import math
 from scipy import special
 
 from .simulation import extrapolpixwin
-from .xqml_utils import getstokes, progress_bar, symarray, GetBinningMatrix
+from .xqml_utils import getstokes, progress_bar, GetBinningMatrix
 
 import _libcov as clibcov
 
 
 def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
-                    pixwin=False, timing=False, MC=0, Sonly=False, openMP=True, SymCompress=False):
+                    pixwin=False, timing=False, MC=0, Sonly=False, openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -117,17 +117,14 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
             spec=spec, pixwin=pixwin, timing=timing)
 
-    #print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))
-
-    if SymCompress:
-        Pl = np.array([symarray(P).packed for P in Pl])
+    #print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))    
         
     return Pl, S
 
 
 
 
-def SignalCovMatrix(Pl, model, SymCompress=False):
+def SignalCovMatrix(Pl, model):
     """
     Compute correlation matrix S = sum_l Pl*Cl
     
@@ -137,7 +134,7 @@ def SignalCovMatrix(Pl, model, SymCompress=False):
     Array containing fiducial CMB spectra (unbinned).
     """
     # Return scalar product btw Pl and the fiducial spectra.
-    return np.sum([symarray(P) for P in Pl] * model[:, None, None], 0)
+    return np.sum(Pl * model[:, None, None], 0)
 
 
 
