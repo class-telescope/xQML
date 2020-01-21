@@ -1,25 +1,23 @@
 #!/usr/bin/env python
 """
 Test script for xQML
-
-Author: Vanneste
 """
 
 from __future__ import division
 
+
 import numpy as np
 import healpy as hp
 from pylab import *
-import astropy.io.fits as fits
 import timeit
 import sys
 
 import xqml
 from xqml.xqml_utils import progress_bar, getstokes
-from xqml.simulation import muKarcmin2var
+from xqml.simulation import Karcmin2var
 from xqml.simulation import extrapolpixwin
-ion()
-show()
+#ion()
+#show()
 
 exp = "Big"
 if len(sys.argv) > 1:
@@ -41,26 +39,25 @@ else:
 lmax = 2 * nside - 1
 nsimu = 100
 MODELFILE = 'planck_base_planck_2015_TTlowP.fits'
-Slmax = lmax
+Slmax = 3*nside-1
 
 
 # provide list of specs to be computed, and/or options
-spec = ['EE','BB'] #'EB', 'TE', 'TB']
+spec = ['EE','BB','EB']
+#spec = ['TT','EE','BB','TE']#'EE','BB', 'EB']#, 'TE', 'TB']
 pixwin = True
 ellbins = np.arange(2, lmax + 2, dell)
 ellbins[-1] = lmax+1
 
 muKarcmin = 1.0
-fwhm = 0.5
+fwhm = 10
 
 
 
 ##############################
 #input model
 clth = np.array(hp.read_cl(MODELFILE))
-Clthshape = zeros(((6,)+shape(clth)[1:]))
-Clthshape[:4] = clth
-clth = Clthshape
+clth = array( list(clth) + list(clth[0:2]*0.))
 lth = arange(2, lmax+1)
 ##############################
 
@@ -81,7 +78,7 @@ elif exp == "Small":
 
 fsky = np.mean(mask)
 npix = sum(mask)
-print("fsky=%.2g %% (npix=%d)" % (100*fsky,npix))
+print("%s patch: fsky=%.2g %% (npix=%d)" % (exp,100*fsky,npix))
 toGB = 1024. * 1024. * 1024.
 emem = 8.*(npix*2*npix*2) * ( len(lth)*2 ) / toGB
 print("mem=%.2g Gb" % emem)
@@ -95,12 +92,10 @@ nspec = len(spec)
 nstoke = len(stokes)
 
 
-# ############## Generate Noise ###############
-pixvar = muKarcmin2var(muKarcmin, nside)
+# ############## Generate White Noise ###############
+pixvar = Karcmin2var(muKarcmin*1e-6, nside)
 varmap = ones((nstoke * npix)) * pixvar
 NoiseVar = np.diag(varmap)
-
-noise = (randn(len(varmap)) * varmap**0.5).reshape(nstoke, -1)
 
 
 
@@ -112,8 +107,8 @@ print( "Init: %d sec" % (s1-start))
 ellval = esti.lbin()
 
 # ############## Compute Analytical variance ###############
-V  = esti.get_covariance(cross=True )
-Va = esti.get_covariance(cross=False)
+#V  = esti.get_covariance(cross=True )
+#Va = esti.get_covariance(cross=False)
 s2 = timeit.default_timer()
 print( "construct covariance: %d sec" % (s2-s1))
 
@@ -136,7 +131,7 @@ for n in np.arange(nsimu):
     t.append( timeit.default_timer() - s1)
     allcla.append(esti.get_spectra(dmA))
 
-print( "get_spectra: %d sec" % mean(t))
+print( "get_spectra: %f sec" % mean(t))
 hcl = mean(allcl, 0)
 scl = std(allcl, 0)
 hcla = mean(allcla, 0)
@@ -168,15 +163,15 @@ semilogy()
 
 subplot(3, 2, 3)
 for s in np.arange(nspec):
-    plot(ellval, scl[s], '--', color='C%i' % ispecs[s], label=r"$\sigma^{%s}_{\rm MC}$" % spec[s])
-    plot(ellval, sqrt(diag(V)).reshape(nspec, -1)[s], 'o', color='C%i' % ispecs[s])
+    plot(ellval, scl[s], 'o', color='C%i' % ispecs[s], label=r"$\sigma^{%s}_{\rm MC}$" % spec[s])
+#    plot(ellval, sqrt(diag(V)).reshape(nspec, -1)[s], '-', color='C%i' % ispecs[s])
 ylabel(r"$\sigma(C_\ell)$")
 semilogy()
 
 subplot(3, 2, 4)
 for s in np.arange(nspec):
-    plot(ellval, scla[s], ':', color='C%i' % ispecs[s], label=r"$\sigma^{%s}_{\rm MC}$" % spec[s])
-    plot(ellval, sqrt(diag(Va)).reshape(nspec, -1)[s], 'o', color='C%i' % ispecs[s])
+    plot(ellval, scla[s], 'o', color='C%i' % ispecs[s], label=r"$\sigma^{%s}_{\rm MC}$" % spec[s])
+#    plot(ellval, sqrt(diag(Va)).reshape(nspec, -1)[s], '-', color='C%i' % ispecs[s])
 semilogy()
 
 subplot(3, 2, 5)
@@ -197,16 +192,16 @@ grid()
 show()
 
 
-## if __name__ == "__main__":
-##     """
-##     Run the doctest using
+if __name__ == "__main__":
+    """
+    Run the doctest using
 
-##     python simulation.py
+    python simulation.py
 
-##     If the tests are OK, the script should exit gracefuly, otherwise the
-##     failure(s) will be printed out.
-##     """
-##     import doctest
-##     if np.__version__ >= "1.14.0":
-##         np.set_printoptions(legacy="1.13")
-##     doctest.testmod()
+    If the tests are OK, the script should exit gracefuly, otherwise the
+    failure(s) will be printed out.
+    """
+    import doctest
+    if np.__version__ >= "1.14.0":
+        np.set_printoptions(legacy="1.13")
+    doctest.testmod()

@@ -16,7 +16,7 @@ import sys
 
 import xqml
 from xqml.xqml_utils import progress_bar, getstokes
-from xqml.simulation import muKarcmin2var
+from xqml.simulation import Karcmin2var
 from xqml.simulation import extrapolpixwin
 ion()
 show()
@@ -98,7 +98,7 @@ nstoke = len(stokes)
 
 
 # ############## Generate Noise ###############
-pixvar = muKarcmin2var(muKarcmin, nside)
+pixvar = Karcmin2var(muKarcmin*1e-6, nside)
 varmap = ones((nstoke * npix)) * pixvar
 NoiseVar = np.diag(varmap)
 
