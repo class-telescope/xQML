@@ -19,7 +19,7 @@ import _libcov as clibcov
 
 
 def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
-                    pixwin=False, timing=False, MC=0, Sonly=False, openMP=True):
+                    pixwin=True, timing=False, MC=0, Sonly=False, openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -115,7 +115,7 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
         clibcov.dSdC( nside, len(istokes), ispec, ellbins, ipok, bell, Pl)
         Pl = Pl.reshape( nbins, npix, npix)
         P, Q, ell, ellval = GetBinningMatrix(ellbins, Slmax)
-        S = SignalCovMatrix(Pl,np.array([P.dot(clth[isp,2:int(ellbins[-1])]) for isp in ispecs]).ravel())
+        S = SignalCovMatrix(Pl,np.array([P.dot(clth[isp,2:Slmax+1]) for isp in ispecs]).ravel())
     else:
         Pl, S = compute_PlS(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
