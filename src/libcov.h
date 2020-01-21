@@ -12,7 +12,7 @@
 #define dSdC(L,I,J) dSdC[ (L)*(npixtot*npixtot) + (I)*npixtot + (J)]
 #define halfpi M_PI/2.
 
-void build_dSdC( int nside, int nstokes, int npix, int inl, long *ellbins, long *ipix, double *bl, double* dSdC);
+void build_dSdC( int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC);
 /**
     Compute the Pl = dS/dCl matrices.
 
@@ -39,7 +39,7 @@ void build_dSdC( int nside, int nstokes, int npix, int inl, long *ellbins, long 
  */
 
 
-void QML_compute_dSdC( double *vr, double *vc, int lmax, int nstokes, double **dSdCpix);
+void QML_compute_dSdC( double *vr, double *vc, int lmax, long *ispec, double **dSdCpix);
 int polrotangle( double *ri, double *rj, double *cos2a, double *sin2a);
 void QML_cross_prod( double *v, double *w, double *z);
 double QML_scal_prod( double *v, double *w);
@@ -49,6 +49,7 @@ double fact( int n);
 
 int define_lrange( int lmax, int *ils);
 int nstokes2nspec( int nstokes);
+int ispec2nspec( long *ispec);
 
 void pix2ang_ring(long nside, long ipix, double *theta, double *phi);
 void pix2vec_ring(long nside, long ipix, double *vec);

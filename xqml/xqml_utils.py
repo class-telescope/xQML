@@ -18,7 +18,7 @@ def pd_inv(a):
     return linalg.solve(a, I, sym_pos = True, overwrite_b = True)
 
 
-def getstokes(spec=None, temp=False, polar=False, corr=False):
+def getstokes(spec):
     """
     Get the Stokes parameters number and name(s)
 
@@ -26,12 +26,6 @@ def getstokes(spec=None, temp=False, polar=False, corr=False):
     ----------
     spec : bool
         If True, get Stokes parameters for polar (default: True)
-    polar : bool
-        If True, get Stokes parameters for polar (default: True)
-    temp : bool
-        If True, get Stokes parameters for temperature (default: False)
-    corr : bool
-        If True, get Stokes parameters for EB and TB (default: False)
 
     Returns
     ----------
@@ -44,50 +38,28 @@ def getstokes(spec=None, temp=False, polar=False, corr=False):
 
     Example
     ----------
-    >>> getstokes(polar=True, temp=False, corr=False)
+    >>> getstokes(['EE','BB'])
     (['Q', 'U'], ['EE', 'BB'], [1, 2])
-    >>> getstokes(polar=True, temp=True, corr=False)
+    >>> getstokes(['TT','EE','BB','TE'])
     (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
-    >>> getstokes(polar=True, temp=True, corr=True)
+    >>> getstokes(['TT', 'EE', 'BB', 'TE', 'EB', 'TB'])
     (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'EB', 'TB'], [0, 1, 2, 3, 4, 5])
     """
-    if spec is not None:
-        _temp = "TT" in spec or "TE" in spec or "TB" in spec or temp
-        _polar = "EE" in spec or "BB" in spec or "TE" in spec or "TB" in \
-            spec or "EB" in spec or polar
-        _corr = "TE" in spec or "TB" in spec or "EB" in spec or corr
-        if not _temp and not _polar and not _corr:
-            print("invalid spectra list and/or no options")
-    else:
-        _temp = temp
-        _polar = polar
-        _corr = corr
-
-    speclist = []
-    if _temp or (spec is None and corr):
-        speclist.extend(["TT"])
-    if _polar:
-        speclist.extend(["EE", "BB"])
-    if spec is not None and not corr:
-        if 'TE' in spec:
-            speclist.extend(["TE"])
-        if 'EB' in spec:
-            speclist.extend(["EB"])
-        if 'TB' in spec:
-            speclist.extend(["TB"])
-
-    elif _corr:
-        speclist.extend(["TE", "EB", "TB"])
-
+    _temp  = "TT" in spec or "TE" in spec or "TB" in spec
+    _polar = "EE" in spec or "BB" in spec or "TE" in spec or "TB" in spec or "EB" in spec
+    _corr  = "TE" in spec or "TB" in spec or "EB" in spec
+    if not _temp and not _polar and not _corr:
+        print("invalid spectra list and/or no options")
+    
     stokes = []
     if _temp:
         stokes.extend(["I"])
     if _polar:
         stokes.extend(["Q", "U"])
-
-    ispecs = [['TT', 'EE', 'BB', 'TE', 'EB', 'TB'].index(s) for s in speclist]
+    
+    ispecs = [['TT', 'EE', 'BB', 'TE', 'TB', 'EB'].index(s) for s in spec]
     istokes = [['I', 'Q', 'U'].index(s) for s in stokes]
-    return stokes, speclist, istokes, ispecs
+    return stokes, spec, istokes, ispecs
 
 
 def ComputeSizeDs_dcb(nside, fsky, deltal=1, unit="Gb"):

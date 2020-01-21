@@ -81,34 +81,38 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
 
     start = timeit.default_timer()
 
-    temp = "TT" in spec
+    clth = np.asarray(clth)
+    if len(clth) == 4:
+        clth = np.concatenate((clth,clth[0:2]*0.))
+
+    temp  = "TT" in spec
     polar = "EE" in spec or "BB" in spec
-    corr = "TE" in spec or "TB" in spec or "EB" in spec
+    corr  = "TE" in spec or "TB" in spec or "EB" in spec
     if Sonly:
         if MC:
             S = S_bins_MC(
-                ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-                polar=polar, temp=temp, corr=corr,
+                ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec,
                 pixwin=pixwin, timing=timing)
         else:
             S = compute_S(
-                ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-                polar=polar, temp=temp, corr=corr,
+                ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec,
                 pixwin=pixwin, timing=timing)
         return S
-
+    
     if MC:
         Pl, S = covth_bins_MC(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-            polar=polar, temp=temp, corr=corr, pixwin=pixwin, timing=timing)
+            spec, pixwin=pixwin, timing=timing)
     elif openMP:
         fpixwin = extrapolpixwin(nside, Slmax, pixwin)
         bell = np.array([bl*fpixwin]*4)[:Slmax+1].ravel()
         stokes, spec, istokes, ispecs = getstokes(spec)
+        ispec = np.zeros(6,int)
+        ispec[ispecs] = 1
         nbins = (len(ellbins)-1)*len(spec)
         npix = len(ipok)*len(istokes)
         Pl = np.ndarray( nbins*npix**2)
-        clibcov.dSdC( nside, len(istokes), ellbins, ipok, bell, Pl)
+        clibcov.dSdC( nside, len(istokes), ispec, ellbins, ipok, bell, Pl)
         Pl = Pl.reshape( nbins, npix, npix)
         P, Q, ell, ellval = GetBinningMatrix(ellbins, Slmax)
         S = SignalCovMatrix(Pl,np.array([P.dot(clth[isp,2:int(ellbins[-1])]) for isp in ispecs]).ravel())
@@ -117,8 +121,9 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
             spec=spec, pixwin=pixwin, timing=timing)
 
-    #print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))    
-        
+    if timing:
+        print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))
+    
     return Pl, S
 
 
@@ -235,7 +240,7 @@ def compute_PlS(
 
     for i in np.arange(npi):
         if timing:
-            progress_bar(i, npi, -0.5 * (start-timeit.default_timer()))
+            progress_bar(i, npi)
         for j in np.arange(i, npi):
             cos_chi = allcosang[i, j]
             if temp:
@@ -482,7 +487,7 @@ def compute_S(
     start = timeit.default_timer()
     for i in np.arange(npi):
         if timing:
-            progress_bar(i, npi, -0.25 * (start-timeit.default_timer()))
+            progress_bar(i, npi)
         for j in np.arange(i, npi):
             if temp:
                 pl = norm*pl0(allcosang[i, j], Slmax)[2:]
@@ -573,7 +578,7 @@ def compute_S(
 
 def covth_bins_MC(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        polar=False, temp=False, corr=False, pixwin=False, timing=False):
+        spec, pixwin=False, timing=False):
     """
     Can be particularly slow on sl7.
     To be enhanced and extended to TT and correlations.
@@ -616,7 +621,7 @@ def covth_bins_MC(
     >>> Pl, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,13), bl=np.arange(13),
     ... clth=np.arange(4*13).reshape(4,-1), Slmax=11, nsimu=100,
-    ... polar=True, temp=False, corr=False, pixwin=True, timing=False)
+    ... spec, pixwin=True, timing=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (12.68135, 406990.12056)
 
@@ -625,10 +630,12 @@ def covth_bins_MC(
     >>> Pl, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,13), bl=np.arange(13),
     ... clth=np.arange(4*13).reshape(4,-1), Slmax=11, nsimu=100,
-    ... polar=False, temp=True, corr=False, pixwin=True, timing=False)
+    ... spec, pixwin=True, timing=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (42.35592, 7414.01784)
     """
+
+    polar = 'EE' in spec or 'BB' in spec
     if nsimu == 1:
         nsimu = (12 * nside**2) * 10 * (int(polar) + 1)
 
@@ -639,7 +646,7 @@ def covth_bins_MC(
     maxell = np.array(ellbins[1: nbins + 1]) - 1
     ellval = (minell + maxell) * 0.5
 
-    Stokes, spec, istokes, ispecs = getstokes(polar=polar, temp=temp, corr=corr)
+    Stokes, spec, istokes, ispecs = getstokes(spec)
     nspec = len(spec)
     ll = np.arange(Slmax+1)
     fpixwin = extrapolpixwin(nside, Slmax, pixwin)
@@ -667,8 +674,7 @@ def covth_bins_MC(
         start = timeit.default_timer()
         for l in np.arange((nspec * nbins)):
             if timing:
-                progress_bar(l, nspec * (nbins),
-                             -(start - timeit.default_timer()))
+                progress_bar(l, nspec * (nbins))
 
             data = [
                 np.array(
@@ -699,8 +705,7 @@ def covth_bins_MC(
         Pl = np.zeros(((nbins), npix, npix))
         for l in np.arange((nbins)):
             if timing:
-                progress_bar(l, nspec * (nbins),
-                             -(start - timeit.default_timer()))
+                progress_bar(l, nspec * (nbins))
             Pl[l] = np.cov(
                 np.array([
                     hp.synfast(
@@ -730,7 +735,7 @@ def covth_bins_MC(
 
 def S_bins_MC(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        polar=True, temp=True, corr=False, pixwin=False, timing=False):
+        spec, pixwin=False, timing=False):
     """
     Can be particularly slow on sl7 !
     To be enhanced and extended to TT and correlations
@@ -768,6 +773,7 @@ def S_bins_MC(
         Pixel signal covariance matrix S
 
     """
+    polar = 'EE' in spec or 'BB' in spec
     if nsimu == 1:
         nsimu = (12 * nside**2) * 10 * (int(polar) + 1)
     lmax = ellbins[-1]
@@ -776,7 +782,7 @@ def S_bins_MC(
     minell = np.array(ellbins[0: nbins])
     maxell = np.array(ellbins[1: nbins + 1]) - 1
     ellval = (minell + maxell) * 0.5
-    Stokes, spec, ind = getstokes(polar=polar, temp=temp, corr=corr)
+    Stokes, spec, ind = getstokes(spec)
     nspec = len(spec)
     ll = np.arange(Slmax + 2)
     fpixwin = extrapolpixwin(nside, Slmax, pixwin)

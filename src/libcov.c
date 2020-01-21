@@ -21,24 +21,26 @@
 // }
 
 
-void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long *ipix, double *bl, double* dSdC)
+void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
 {
   const int lmax=ellbins[nbin]-1;
   const int lmax1 = lmax+1;
-  const int ns=3, nspecall = 4;
-  const int nspec = nstokes2nspec(nstokes);
+  const int ns=3, nspecall = 6;
+  const int nspec = ispec2nspec(ispec);
+//   const int nspec = nstokes2nspec(nstokes);
   const int64_t npixtot = npix*nstokes;
 
-//   fprintf( stdout, "lmax=%d\n", lmax);
-//   fprintf( stdout, "npix=%d\n", npix);
-//   fprintf( stdout, "nstokes=%d\n", nstokes);
-//   fprintf( stdout, "nspec=%d\n", nspec);
+  fprintf( stdout, "lmax=%d\n", lmax);
+  fprintf( stdout, "npix=%d\n", npix);
+  fprintf( stdout, "nstokes=%d\n", nstokes);
+  fprintf( stdout, "nspec=%d\n", nspec);
 
   int64_t ntot = nspec*nbin*npixtot*npixtot;
-//   fprintf( stdout, "memset (%d,%d,%d,%d = %lld)...\n", nspec,nbin,nstokes,npix,ntot);
+  fprintf( stdout, "memset (%d,%d,%d,%d = %lld)...\n", nspec,nbin,nstokes,npix,ntot);
   memset( dSdC, 0., ntot * sizeof(double));
+  fprintf( stdout, "ispec = (%d,%d,%d,%d,%d,%d)\n", ispec[0],ispec[1],ispec[2],ispec[3],ispec[4],ispec[5]);
 
-#pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins)
+#pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins,ispec)
   {
     int s=0;
     double vr[3], vc[3];
@@ -49,6 +51,9 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long
       dSdCpix[il] = (double *) calloc( ns*ns, sizeof(double));
       if( dSdCpix[il] == NULL) EXIT_INFO( -1, "Problem allocation dSdCpix (l=%d)...\n", il);
     }
+
+    int sI = 0, sQ = 1, sU = 2;
+    if( nstokes == 2) { sQ = 0; sU = 1; }
     
 #pragma omp for schedule(dynamic)
     /* loop on local pix to build (3x3) blocks */
@@ -58,42 +63,60 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long
       for( int rpix=0; rpix<npix; rpix++) {
 	pix2vec_ring(nside, ipix[rpix], vr);
 
-	QML_compute_dSdC( vr, vc, lmax, nstokes, dSdCpix);
+	QML_compute_dSdC( vr, vc, lmax, ispec, dSdCpix);
 
 	for( int ib=0; ib<nbin; ib++) {
 // 	  int l=ellbins[ib];
  	  for( int l=ellbins[ib]; l<=ellbins[ib+1]-1; l++) {
 	    s=0;
 
-	    if( nstokes != 2) {
-	      dSdC(s*nbin+ib,0*npix+cpix,0*npix+rpix) += dSdCpix[0*lmax1+l][0*ns+0] * bl[0*lmax1+l]*bl[0*lmax1+l];  //TT on II
+	    if( ispec[0] == 1) {
+	      dSdC(s*nbin+ib,sI*npix+cpix,sI*npix+rpix) += dSdCpix[0*lmax1+l][0*ns+0] * bl[0*lmax1+l]*bl[0*lmax1+l];  //TT on II
 	      s++;
 	    }
 	    
 	    //EE-BB
-	    if( nstokes > 1) {
-	      int s1=s;
-	      int s2=s+1;
-	      dSdC(s*nbin+ib,s1*npix+cpix,s1*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QQ
-	      dSdC(s*nbin+ib,s2*npix+cpix,s1*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QU
-	      dSdC(s*nbin+ib,s1*npix+cpix,s2*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UQ
-	      dSdC(s*nbin+ib,s2*npix+cpix,s2*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UU
+	    if( ispec[1] == 1 || ispec[2] == 1) {
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QQ
+	      dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QU
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UQ
+	      dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UU
 	      s++;
 	      
-	      dSdC(s*nbin+ib,s1*npix+cpix,s1*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QQ
-	      dSdC(s*nbin+ib,s2*npix+cpix,s1*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QU
-	      dSdC(s*nbin+ib,s1*npix+cpix,s2*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UQ
-	      dSdC(s*nbin+ib,s2*npix+cpix,s2*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UU
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QQ
+	      dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QU
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UQ
+	      dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UU
 	      s++;
 	    }
 	    
 	    //TE
-	    if( nstokes == 3) {
-	      dSdC(s*nbin+ib,1*npix+cpix,0*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
-	      dSdC(s*nbin+ib,2*npix+cpix,0*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
-	      dSdC(s*nbin+ib,0*npix+cpix,1*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
-	      dSdC(s*nbin+ib,0*npix+cpix,2*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
+	    if( ispec[3] == 1) {
+	      dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
+	      dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
+	      dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
+	      s++;
 	    }
+
+	    //TB
+	    if( ispec[4] == 1) {
+	      dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IQ
+	      dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IU
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on QI
+	      dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on UI
+	      s++;
+	    }
+
+	    //EB
+	    if( ispec[5] == 1) {
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[5*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on QQ
+	      dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[5*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on QU
+	      dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[5*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on UQ
+	      dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[5*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on UU
+	      s++;
+	    }
+
  	  } /* end loop l */
 	  
 	} /* end loop bins */
@@ -116,23 +139,24 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ellbins, long
 
 
 /* compute 3x3 matrix correlation matrix for couple (ipix,jpix) */
-void QML_compute_dSdC( double *vr, double *vc, int lmax, int nstokes, double **dSdCpix)
+void QML_compute_dSdC( double *vr, double *vc, int lmax, long *ispec, double **dSdCpix)
 {
   double *pl=NULL, *d20=NULL, *d2p2=NULL, *d2m2=NULL;
   double cos2aij, sin2aij, cos2aji, sin2aji;
   double norm, P02, Q22, R22;
   double cos_chi;
   int l, ns=3;
+  int spin0=0, spin2=0, spin02=0;
 
   /* alloc vectors */
-  if( nstokes != 2)
-    pl   = (double *) calloc( (lmax+1), sizeof(double));
-  if( nstokes > 1) {
-    d2p2 = (double *) calloc( (lmax+1), sizeof(double));
-    d2m2 = (double *) calloc( (lmax+1), sizeof(double));
-  }
-  if( nstokes > 2)
-    d20  = (double *) calloc( (lmax+1), sizeof(double));
+  if( ispec[0] == 1) spin0 = 1;
+  if( ispec[1] == 1 || ispec[2] == 1 || ispec[5] == 1) spin2 = 1;
+  if( ispec[3] == 1 || ispec[4] == 1) spin02 = 1;
+  
+  if( spin0 ) pl   = (double *) calloc( (lmax+1), sizeof(double));
+  if( spin2 ) d2p2 = (double *) calloc( (lmax+1), sizeof(double));
+  if( spin2 ) d2m2 = (double *) calloc( (lmax+1), sizeof(double));
+  if( spin02) d20  = (double *) calloc( (lmax+1), sizeof(double));
   
   /* generate d_ss'(l) */
   cos_chi = QML_scal_prod( vc, vr);
@@ -141,23 +165,23 @@ void QML_compute_dSdC( double *vr, double *vc, int lmax, int nstokes, double **d
   if( cos_chi < -1) cos_chi = -1.;
 
 /* legendre( cos_chi, 0, lmax, pl); */
-  if( nstokes != 2) dlss( cos_chi, 0,  0, lmax,   pl);
-  if( nstokes >  1) dlss( cos_chi, 2,  2, lmax, d2p2);
-  if( nstokes >  1) dlss( cos_chi, 2, -2, lmax, d2m2);
-  if( nstokes >  2) dlss( cos_chi, 2,  0, lmax,  d20);
+  if( spin0 ) dlss( cos_chi, 0,  0, lmax,   pl);
+  if( spin2 ) dlss( cos_chi, 2,  2, lmax, d2p2);
+  if( spin2 ) dlss( cos_chi, 2, -2, lmax, d2m2);
+  if( spin02) dlss( cos_chi, 2,  0, lmax,  d20);
 
   /* generate rotation angles */
-  if( nstokes > 1) polrotangle( vr, vc, &cos2aij, &sin2aij);
-  if( nstokes > 1) polrotangle( vc, vr, &cos2aji, &sin2aji);
+  if( spin2 || spin02) polrotangle( vr, vc, &cos2aij, &sin2aij);
+  if( spin2 || spin02) polrotangle( vc, vr, &cos2aji, &sin2aji);
   
   /* loop on l */
   for( l=2; l<=lmax; l++) {
     norm = (double)(2*l+1) / (4.*M_PI);
 
-    if( nstokes != 2)
+    if( ispec[0] == 1)
       dSdCpix[0*(lmax+1)+l][0*ns + 0] = norm * pl[l] ;  //TT on II
 
-    if( nstokes > 1) {
+    if( ispec[1] == 1 || ispec[2] == 1) {
       Q22 = norm * ( d2p2[l] + d2m2[l] )/2.;
       R22 = norm * ( d2p2[l] - d2m2[l] )/2.;
       
@@ -172,7 +196,7 @@ void QML_compute_dSdC( double *vr, double *vc, int lmax, int nstokes, double **d
       dSdCpix[2*(lmax+1)+l][2*ns + 2] = ( sin2aij*sin2aji*R22 + cos2aij*cos2aji*Q22);  //BB on UU
     }
     
-    if( nstokes > 2) {
+    if( ispec[3] == 1) {
       P02 = -d20[l];
       dSdCpix[3*(lmax+1)+l][1*ns + 0] =   P02*cos2aji ;  //TE on IQ
       dSdCpix[3*(lmax+1)+l][2*ns + 0] = - P02*sin2aji ;  //TE on IU
@@ -180,12 +204,29 @@ void QML_compute_dSdC( double *vr, double *vc, int lmax, int nstokes, double **d
       dSdCpix[3*(lmax+1)+l][0*ns + 2] = - P02*sin2aij ;  //TE on UI
     }
 
+    if( ispec[4] == 1) {
+      P02 = -d20[l];
+      dSdCpix[4*(lmax+1)+l][1*ns + 0] = P02*sin2aji ;  //TB on IQ
+      dSdCpix[4*(lmax+1)+l][2*ns + 0] = P02*cos2aji ;  //TB on IU
+      dSdCpix[4*(lmax+1)+l][0*ns + 1] = P02*sin2aij ;  //TB on QI
+      dSdCpix[4*(lmax+1)+l][0*ns + 2] = P02*cos2aij ;  //TB on UI
+    }
+
+    if( ispec[5] == 1) {
+      Q22 = norm * ( d2p2[l] + d2m2[l] )/2.;
+      R22 = norm * ( d2p2[l] - d2m2[l] )/2.;      
+      dSdCpix[5*(lmax+1)+l][1*ns + 1] = ( cos2aij*sin2aji*Q22 - sin2aij*cos2aji*R22 + sin2aij*cos2aji*Q22 - cos2aij*sin2aji*R22);  //EB on QQ
+      dSdCpix[5*(lmax+1)+l][1*ns + 2] = ( cos2aij*cos2aji*Q22 + sin2aij*sin2aji*R22 - sin2aij*sin2aji*Q22 - cos2aij*cos2aji*R22);  //EB on QU
+      dSdCpix[5*(lmax+1)+l][2*ns + 1] = ( cos2aij*cos2aji*Q22 + sin2aij*sin2aji*R22 - sin2aij*sin2aji*Q22 - cos2aij*cos2aji*R22);  //EB on UQ
+      dSdCpix[5*(lmax+1)+l][2*ns + 2] = (-cos2aij*sin2aji*Q22 + sin2aij*cos2aji*R22 - sin2aij*cos2aji*Q22 + cos2aij*sin2aji*R22);  //EB on UU
+    }
+
   }
 
-  if( nstokes !=2) free( pl);
-  if( nstokes > 1) free( d2p2);
-  if( nstokes > 1) free( d2m2);
-  if( nstokes > 2) free( d20);
+  if( spin0 ) free( pl  );
+  if( spin2 ) free( d2p2);
+  if( spin2 ) free( d2m2);
+  if( spin02) free( d20 );
 }
 
 
@@ -338,6 +379,20 @@ double fact( int n)
 
 
 /*************************************************************************/
+int ispec2nspec( long *ispec)
+{
+  int nspec=0;
+
+  for( int i=0; i<6; i++)
+    if( ispec[i]) nspec++;
+
+  //force EE and BB
+  if( ispec[1] == 1) ispec[2] == 1;
+  if( ispec[2] == 1) ispec[1] == 1;  
+
+  return( nspec);
+}
+
 int nstokes2nspec( int nstokes)
 {
   int nspec=0;

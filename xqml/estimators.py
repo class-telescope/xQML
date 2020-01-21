@@ -168,10 +168,10 @@ def CrossWindowFunction(El, Pl):
      [134 478 822]]
     """
     nl = len(El)
-
+    
     # pas de transpose car symm
     Wll = np.asarray( [np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
-
+    
     return Wll
 
 

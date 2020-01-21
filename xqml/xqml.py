@@ -34,8 +34,7 @@ __all__ = ['xQML','Bins']
 class xQML(object):
     """ Main class to handle the spectrum estimation """
     def __init__( self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
-                  S=None, fwhm=0., bell=None, spec=None, temp=False, polar=True, corr=False,
-                  pixwin=True):
+                  S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True):
         """
         Parameters
         ----------
@@ -53,15 +52,8 @@ class xQML(object):
             FWHM of the experiment beam
         bell : ndarray, optional
             beam transfer function (priority over fwhm)
-        polar : boolean, optional
-            Compute the polarisation part E and B. Default: True
-        temp : boolean, optional
-            Compute the temperature part T. Default: False
-        corr : boolean, optional
-            If True, compute TE, TB, EB spectra. Default: False
         pixwin : boolean, optional
             If True, applies pixel window function to spectra. Default: True
-
         """
         self.bias = None
         self.cross = NB is not None
@@ -94,10 +86,14 @@ class xQML(object):
         # For example that would be good to assert that the user
         # set at least polar or temp to True.
         
-        self.stokes, self.spec, self.istokes, self.ispecs = getstokes(spec, temp, polar, corr)
+        self.stokes, self.spec, self.istokes, self.ispecs = getstokes(spec)
         self.nstokes = len(self.stokes)
         self.nspec = len(self.spec)
         self.pixwin = pixwin
+        
+        clth = np.asarray(clth)
+        if len(clth) == 4:
+            clth = np.concatenate((clth,clth[0:2]*0.))
         
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
@@ -146,19 +142,19 @@ class xQML(object):
         self.cross = NB is not None
         self.NA = NA
         self.NB = NB if self.cross else NA
-
+        
         # Invert (signalA + noise) matrix
         invCa = pd_inv(self.S + self.NA)
-
+        
         # Invert (signalB + noise) matrix
         invCb = pd_inv(self.S + self.NB)
-
+        
         # Compute E using Eq...
         self.El = El(invCa, invCb, self.Pl)
-
+        
         # Finally compute invW by inverting...
         self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl))
-
+        
         # Compute bias for auto
 #        if not self.cross:
 #            self.bias = biasQuadEstimator(self.NA, self.El)
