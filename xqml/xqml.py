@@ -76,16 +76,13 @@ class xQML(object):
         
         # Maximum multipole based on nside (rule of thumb to avoid aliasing)
         self.Slmax = np.max(bins)-1 if lmax is None else lmax
-        
+            
         # Beam 2pt function (Gaussian)
         self.bl = hp.gauss_beam(np.deg2rad(fwhm), lmax=self.Slmax)
         if bell is not None:
             self.bl = bell[:self.Slmax+1]
         
-        # Set the Stokes parameters needed
-        # For example that would be good to assert that the user
-        # set at least polar or temp to True.
-        
+        # Set the Stokes parameters needed        
         self.stokes, self.spec, self.istokes, self.ispecs = getstokes(spec)
         self.nstokes = len(self.stokes)
         self.nspec = len(self.spec)
@@ -99,7 +96,6 @@ class xQML(object):
         # covariance using the fiducial model.
         # Otherwise compute Pl and S from the arguments.
         # Ok, but Pl cannot be binned, otherwise S construction is not valid
-
         if Pl is None:
             self.Pl, self.S = compute_ds_dcb(
                 self.ellbins, self.nside, self.ipok,
@@ -111,12 +107,10 @@ class xQML(object):
                 self.S = self._SignalCovMatrix(clth)
             else:
                 self.S = S
-        if S is not None:
-            self.S = S
         
         if NA is not None:
             self.construct_esti(NA=NA, NB=NB)
-
+    
     def compute_dSdC( self, clth, lmax=None, timing=True, MC=False, openMP=True):
         if lmax is None:
             lmax = 2*self.nside-1   #Why ?
@@ -177,7 +171,6 @@ class xQML(object):
         cl : array or sequence of arrays
             Returns cl or a list of cl's (TT, EE, BB, TE, EB, TB)
         """
-        # Should compute auto-spectra if map2 == None ?
         # Define conditions based on the map size
         self.cross = mapB is not None
         cond_sizeA = np.size(mapA) == self.nstokes * self.npix
@@ -187,10 +180,10 @@ class xQML(object):
             dB = mapB if cond_sizeB else mapB[self.istokes][:,self.mask]
 
             yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
-            cl = ClQuadEstimator(self.invW, yl)
         else:
             yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
-            cl = ClQuadEstimator(self.invW, yl)
+
+        cl = ClQuadEstimator(self.invW, yl)
 
         # Return the reshaped set of cls
         return cl.reshape(self.nspec, -1)
@@ -222,10 +215,6 @@ class xQML(object):
         """
         Compute correlation matrix S = sum_l Pl*Cl
 
-        QUESTION: why you need to pass clth while it is in the constructor of
-        the class already? you could just register it as
-        an attribute (self.clth) and call it here.
-
         Parameters
         ----------
         clth : ndarray of floats
@@ -239,8 +228,9 @@ class xQML(object):
         return SignalCovMatrix( self.Pl, model)
 
     def BinSpectra( self, clth):
-        P, Q, ell, ellval = GetBinningMatrix(self.ellbins, self.Slmax)
-        return( np.asarray([P.dot(clth[isp,2:int(self.ellbins[-1])]) for isp in self.ispecs]))
+        lmax = int(self.ellbins[-1])-1
+        P, Q, ell, ellval = GetBinningMatrix(self.ellbins, lmax)
+        return( np.asarray([P.dot(clth[isp,2:lmax+1]) for isp in self.ispecs]))
 
     def lbin( self):
         P, Q, ell, ellval = GetBinningMatrix(self.ellbins, self.Slmax)
@@ -252,7 +242,7 @@ class xQML(object):
 
 
 
-
+##Not USED YET
 class Bins(object):
     """
         lmins : list of integers
