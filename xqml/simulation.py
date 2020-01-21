@@ -10,14 +10,14 @@ import healpy as hp
 
 
 
-def muKarcmin2var(muKarcmin, nside):
+def Karcmin2var(Karcmin, nside):
     """
-    Return pixel variance for a given nside and noise level [1e-6 K . arcmin]
+    Return pixel variance for a given nside and noise level [K . arcmin]
 
     Parameters
     ----------
-    muKarcmin : float
-        Pixel noise [muK . arcmin]
+    Karcmin : float
+        Pixel noise [K . arcmin]
     nside : int
         Healpix map resolution (power of 2)
 
@@ -28,12 +28,12 @@ def muKarcmin2var(muKarcmin, nside):
 
     Example
     ----------
-    >>> var = muKarcmin2var(10.0, 16)
+    >>> var = Karcmin2var(10e-6, 16)
     >>> print(round(var * 1e16))
     21.0
     """
     pixarea = hp.nside2pixarea(nside, degrees=True)
-    varperpix = (muKarcmin * 1e-6 / 60.)**2 / pixarea
+    varperpix = (Karcmin / 60.)**2 / pixarea
     return varperpix
 
 
@@ -56,7 +56,7 @@ def pixvar2nl(pixvar, nside):
     Example
     ----------
     >>> nside = 16
-    >>> pixvar = muKarcmin2var(10.0, nside)
+    >>> pixvar = Karcmin2var(10e-6, nside)
     >>> nl = pixvar2nl(pixvar, nside)
     >>> print(round(nl * 1e18))
     8.0
@@ -86,7 +86,7 @@ def getNl(pixvar, nside, nbins):
     Example
     ----------
     >>> nside = 16
-    >>> pixvar = muKarcmin2var(10.0, nside)
+    >>> pixvar = Karcmin2var(10e-6, nside)
     >>> nl = getNl(pixvar, nside, 2)
     >>> print(round(nl[0] * 1e18))
     8.0
