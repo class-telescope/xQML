@@ -51,7 +51,7 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *
       dSdCpix[il] = (double *) calloc( ns*ns, sizeof(double));
       if( dSdCpix[il] == NULL) EXIT_INFO( -1, "Problem allocation dSdCpix (l=%d)...\n", il);
     }
-
+    
     int sI = 0, sQ = 1, sU = 2;
     if( nstokes == 2) { sQ = 0; sU = 1; }
     
@@ -383,12 +383,21 @@ int ispec2nspec( long *ispec)
 {
   int nspec=0;
 
+  //force TT & EE for TE
+  if( ispec[3] == 1) ispec[0] = ispec[1] = 1;
+
+  //force TT & BB for TB
+  if( ispec[4] == 1) ispec[0] = ispec[2] = 1;
+
+  //force EE & BB
+  if( ispec[1] == 1) ispec[1] = ispec[2] = 1;
+  if( ispec[2] == 1) ispec[1] = ispec[2] = 1;  
+
+  //force EE & BB for EB
+  if( ispec[5] == 1) ispec[1] = ispec[2] = 1;
+
   for( int i=0; i<6; i++)
     if( ispec[i]) nspec++;
-
-  //force EE and BB
-  if( ispec[1] == 1) ispec[2] == 1;
-  if( ispec[2] == 1) ispec[1] == 1;  
 
   return( nspec);
 }
