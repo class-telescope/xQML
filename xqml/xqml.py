@@ -91,6 +91,14 @@ class xQML(object):
         clth = np.asarray(clth)
         if len(clth) == 4:
             clth = np.concatenate((clth,clth[0:2]*0.))
+
+        nbin = len(self.ellbins)
+        nmem = self.nspec*nbin*(self.nstokes*self.npix)**2
+        toGb = 1024. * 1024. * 1024.
+        print( "xQML")
+        print( "spec: ", spec)
+        print( "nbin: ", nbin)
+        print( "Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
         
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
