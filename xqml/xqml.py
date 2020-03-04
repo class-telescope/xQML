@@ -34,7 +34,7 @@ __all__ = ['xQML','Bins']
 class xQML(object):
     """ Main class to handle the spectrum estimation """
     def __init__( self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
-                  S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True):
+                  S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True):
         """
         Parameters
         ----------
@@ -95,10 +95,11 @@ class xQML(object):
         nbin = len(self.ellbins)
         nmem = self.nspec*nbin*(self.nstokes*self.npix)**2
         toGb = 1024. * 1024. * 1024.
-        print( "xQML")
-        print( "spec: ", spec)
-        print( "nbin: ", nbin)
-        print( "Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
+        if verbose:
+            print( "xQML")
+            print( "spec: ", spec)
+            print( "nbin: ", nbin)
+            print( "Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
         
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
@@ -108,7 +109,7 @@ class xQML(object):
             self.Pl, self.S = compute_ds_dcb(
                 self.ellbins, self.nside, self.ipok,
                 self.bl, clth, self.Slmax,
-                self.spec, pixwin=self.pixwin, timing=True, MC=False, openMP=True)
+                self.spec, pixwin=self.pixwin, verbose=verbose, MC=False, openMP=True)
         else:
             self.Pl = Pl
             if S is None:
@@ -117,17 +118,17 @@ class xQML(object):
                 self.S = S
         
         if NA is not None:
-            self.construct_esti(NA=NA, NB=NB)
+            self.construct_esti(NA=NA, NB=NB, verbose=verbose)
     
-    def compute_dSdC( self, clth, lmax=None, timing=True, MC=False, openMP=True):
+    def compute_dSdC( self, clth, lmax=None, verbose=True, MC=False, openMP=True):
         if lmax is None:
             lmax = 2*self.nside-1   #Why ?
         
         self.Pl, self.S = compute_ds_dcb( self.ellbins, self.nside, self.ipok, self.bl, clth, lmax,
-                                          self.spec, pixwin=self.pixwin, timing=timing, MC=MC, openMP=openMP)
+                                          self.spec, pixwin=self.pixwin, verbose=verbose, MC=MC, openMP=openMP)
         return( self.Pl, self.S)
 
-    def construct_esti(self, NA, NB=None):
+    def construct_esti(self, NA, NB=None, verbose=False):
         """
         Compute the inverse of the datasets pixel covariance matrices C,
         the quadratic matrix parameter E, and inverse of the window
@@ -144,23 +145,28 @@ class xQML(object):
         self.cross = NB is not None
         self.NA = NA
         self.NB = NB if self.cross else NA
+
+        tstart = timeit.default_timer()
         
         # Invert (signalA + noise) matrix
         invCa = pd_inv(self.S + self.NA)
-        
+
         # Invert (signalB + noise) matrix
         invCb = pd_inv(self.S + self.NB)
-        
-        # Compute E using Eq...
+
+        # Compute El = Ca^-11.Pl.Cb^-1 (long)
         self.El = El(invCa, invCb, self.Pl)
         
-        # Finally compute invW by inverting...
+        # Finally compute invW by inverting (long)
         self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl))
         
         # Compute bias for auto
 #        if not self.cross:
 #            self.bias = biasQuadEstimator(self.NA, self.El)
         self.bias = biasQuadEstimator(self.NA, self.El)
+
+        if verbose:
+            print( "Construct estimator: %.1f sec" % (timeit.default_timer()-tstart))
 
 
     def get_spectra(self, mapA, mapB=None):

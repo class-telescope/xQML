@@ -19,7 +19,7 @@ import _libcov as clibcov
 
 
 def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
-                    pixwin=True, timing=False, MC=0, Sonly=False, openMP=True):
+                    pixwin=True, verbose=False, MC=0, Sonly=False, openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -43,7 +43,7 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
-    timing : bool
+    verbose : bool
         If True, displays timmer. Default: False
     MC : int
         If not 0, computes Pl using Monte-Carlo method from MC simulations.
@@ -66,7 +66,7 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     ... np.array([2,4,5,10]), 2, np.array([0,1,4,10,11]), np.arange(10),
     ... clth=np.arange(60).reshape(6,-1), Slmax=9,
     ... spec=["TT", "EE", "BB", "TE", "EB", "TB"],
-    ... pixwin=True, timing=False, MC=0, Sonly=False)
+    ... pixwin=True, verbose=False, MC=0, Sonly=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (1149.18805, 23675.10206)
     """
@@ -79,7 +79,7 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     allcosang[allcosang > 1] = 1.0
     allcosang[allcosang < -1] = -1.0
 
-    start = timeit.default_timer()
+    tstart = timeit.default_timer()
 
     clth = np.asarray(clth)
     if len(clth) == 4:
@@ -92,17 +92,17 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
         if MC:
             S = S_bins_MC(
                 ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec,
-                pixwin=pixwin, timing=timing)
+                pixwin=pixwin, verbose=verbose)
         else:
             S = compute_S(
                 ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec,
-                pixwin=pixwin, timing=timing)
+                pixwin=pixwin, verbose=verbose)
         return S
     
     if MC:
         Pl, S = covth_bins_MC(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-            spec, pixwin=pixwin, timing=timing)
+            spec, pixwin=pixwin, verbose=verbose)
     elif openMP:
         fpixwin = extrapolpixwin(nside, Slmax, pixwin)
         bell = np.array([bl*fpixwin]*4)[:Slmax+1].ravel()
@@ -119,10 +119,10 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     else:
         Pl, S = compute_PlS(
             ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-            spec=spec, pixwin=pixwin, timing=timing)
+            spec=spec, pixwin=pixwin, verbose=verbose)
 
-    if timing:
-        print( "Total time (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-start))
+    if verbose:
+        print( "Construct Pl (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-tstart))
     
     return Pl, S
 
@@ -146,7 +146,7 @@ def SignalCovMatrix(Pl, model):
 
 def compute_PlS(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-        spec, pixwin=True, timing=False):
+        spec, pixwin=True, verbose=False):
     """
     Computes Legendre polynomes Pl = dS/dCb and signal matrix S.
 
@@ -170,7 +170,7 @@ def compute_PlS(
     pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
-    timing : bool
+    verbose : bool
         If True, displays timmer. Default: False
 
     Returns
@@ -186,14 +186,14 @@ def compute_PlS(
     >>> Pl, S = compute_PlS(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
     ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
-    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, timing=False)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, verbose=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (-429.8591, -17502.8982)
 
     >>> Pl, S = compute_PlS(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
     ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
-    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, timing=False)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, verbose=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (-756.35517, -31333.69722)
     """
@@ -236,10 +236,10 @@ def compute_PlS(
     Pl = np.zeros((nspec*nbins, nsto*npi, nsto*npi))
     S = np.zeros((nsto*npi, nsto*npi))
 
-    start = timeit.default_timer()
+    tstart = timeit.default_timer()
 
     for i in np.arange(npi):
-        if timing:
+        if verbose:
             progress_bar(i, npi)
         for j in np.arange(i, npi):
             cos_chi = allcosang[i, j]
@@ -403,7 +403,7 @@ def compute_PlS(
 
 def compute_S(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-        spec, pixwin=True, timing=False):
+        spec, pixwin=True, verbose=False):
     """
     Computes signal matrix S.
 
@@ -427,7 +427,7 @@ def compute_S(
     pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
-    timing : bool
+    verbose : bool
         If True, displays timmer. Default: False
 
     Returns
@@ -440,14 +440,14 @@ def compute_S(
     >>> S = compute_S(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(10),
     ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
-    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, timing=False)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=True, verbose=False)
     >>> print(round(np.sum(S),5))
     -17502.8982
 
     >>> S = compute_S(np.array([2,3,4,10]),4,ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,15).reshape(3,-1), bl=np.arange(13),
     ... clth=np.arange(6*13).reshape(6,-1), Slmax=9,
-    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, timing=False)
+    ... spec=["TT", "EE", "BB", "TE", "EB", "TB"], pixwin=False, verbose=False)
     >>> print(round(np.sum(S),5))
     -31333.69722
     """
@@ -484,9 +484,9 @@ def compute_S(
     clthn = clth[:, 2: Slmax+1]
     S = np.zeros((nsto*npi, nsto*npi))
 
-    start = timeit.default_timer()
+    tstart = timeit.default_timer()
     for i in np.arange(npi):
-        if timing:
+        if verbose:
             progress_bar(i, npi)
         for j in np.arange(i, npi):
             if temp:
@@ -578,7 +578,7 @@ def compute_S(
 
 def covth_bins_MC(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        spec, pixwin=False, timing=False):
+        spec, pixwin=False, verbose=False):
     """
     Can be particularly slow on sl7.
     To be enhanced and extended to TT and correlations.
@@ -603,7 +603,7 @@ def covth_bins_MC(
     pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
-    timing : bool
+    verbose : bool
         If True, displays timmer. Default: False
 
     Returns
@@ -621,7 +621,7 @@ def covth_bins_MC(
     >>> Pl, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,13), bl=np.arange(13),
     ... clth=np.arange(4*13).reshape(4,-1), Slmax=11, nsimu=100,
-    ... spec, pixwin=True, timing=False)
+    ... spec, pixwin=True, verbose=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (12.68135, 406990.12056)
 
@@ -630,7 +630,7 @@ def covth_bins_MC(
     >>> Pl, S = covth_bins_MC(np.array([2,3,4]), 4, ipok=np.array([0,1,3]),
     ... allcosang=np.linspace(0,1,13), bl=np.arange(13),
     ... clth=np.arange(4*13).reshape(4,-1), Slmax=11, nsimu=100,
-    ... spec, pixwin=True, timing=False)
+    ... spec, pixwin=True, verbose=False)
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (42.35592, 7414.01784)
     """
@@ -655,7 +655,7 @@ def covth_bins_MC(
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
     masks = np.array(masks)
     npix = len(ipok)
-    start = timeit.default_timer()
+    tstart = timeit.default_timer()
     norm = bl[0: Slmax + 1]**2 * fpixwin[0: Slmax + 1]**2
 
     if polar:
@@ -671,9 +671,9 @@ def covth_bins_MC(
                 ClthOne[l, 4] = masks[l % nbins] * norm
 
         Pl = np.zeros((nspec * (nbins), 2 * npix, 2 * npix))
-        start = timeit.default_timer()
+        tstart = timeit.default_timer()
         for l in np.arange((nspec * nbins)):
-            if timing:
+            if verbose:
                 progress_bar(l, nspec * (nbins))
 
             data = [
@@ -704,7 +704,7 @@ def covth_bins_MC(
             ClthOne[l] = masks[l] * norm
         Pl = np.zeros(((nbins), npix, npix))
         for l in np.arange((nbins)):
-            if timing:
+            if verbose:
                 progress_bar(l, nspec * (nbins))
             Pl[l] = np.cov(
                 np.array([
@@ -735,7 +735,7 @@ def covth_bins_MC(
 
 def S_bins_MC(
         ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        spec, pixwin=False, timing=False):
+        spec, pixwin=False, verbose=False):
     """
     Can be particularly slow on sl7 !
     To be enhanced and extended to TT and correlations
@@ -764,7 +764,7 @@ def S_bins_MC(
     pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
-    timing : bool
+    verbose : bool
         If True, displays timmer. Default: False
 
     Returns
@@ -791,7 +791,7 @@ def S_bins_MC(
         masks.append((ll[:] >= minell[i]) & (ll[:] <= maxell[i]))
     masks = np.array(masks)
     npix = len(ipok)
-    start = timeit.default_timer()
+    tstart = timeit.default_timer()
     norm = bl[0: Slmax + 1]**2 * fpixwin[0: Slmax + 1]**2
 
     if polar:
