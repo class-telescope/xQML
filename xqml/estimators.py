@@ -145,6 +145,7 @@ def CrossWindowFunction(El, Pl):
     """
     Compute mode-mixing matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
+    Use the trick with matrices: Trace[A.B] = sum(A x B) (where . is the matrix product and x the elementwise mult)
     
     Parameters
     ----------
@@ -169,7 +170,7 @@ def CrossWindowFunction(El, Pl):
     """
     nl = len(El)
     
-    # pas de transpose car symm
+    # No transpose because E symm
     Wll = np.asarray( [np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
     
     return Wll
