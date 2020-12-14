@@ -64,33 +64,23 @@ def getstokes(spec):
     return stokes, spec, istokes, ispecs
 
 
-def progress_bar(i, n):
-    """
-    ???
-
-    Parameters
-    ----------
-    i : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    ntot = 50
-    ndone = ntot * (i+1) / n
-    a = '\r|'
-    for k in np.arange(ndone):
-        a += '#'
-    for k in np.arange(ntot-ndone):
-        a += ' '
-    fra = (i+1.)/n
-    a += '| %i %%' % round(fra*100.)
-    sys.stdout.write(a)
-    # sys.stdout.flush()
-    if i == n-1:
-        sys.stdout.write('\n')
-        sys.stdout.flush()
+def progress_bar(it,ntot,name=""):
+    barLength = 20 # Modify this to change the length of the progress bar
+    status = ""
+    if isinstance(it, int):
+        progress = float(it+1)/ntot
+    else:
+        progress = it
+    if progress < 0:
+        progress = 0
+        status = "Halt...\r\n"
+    if progress >= 1:
+        progress = 1
+        status = "Done...\r\n"
+    block = int(round(barLength*progress))
+    text = "\r{0} [{1}] {2}% {3}".format( name, "#"*block + "-"*(barLength-block), round(progress*100), status)
+    sys.stdout.write(text)
+    sys.stdout.flush()
 
 
 
@@ -189,8 +179,7 @@ def GetBinningMatrix( ellbins, lmax, norm=False):
 
     allmasklm = nspec*[list(masklm)]
     masklM = np.array(sparse.block_diag(allmasklm[:]).toarray())
-    binsnorm = np.array(
-        nspec * [list(np.arange(minell[0], np.max(ellbins)))]).flatten()
+    binsnorm = np.array(nspec * [list(np.arange(minell[0], np.max(ellbins)))]).flatten()
 
     binsnorm = binsnorm*(binsnorm+1)/2./np.pi
     P = np.array(masklM)*1.

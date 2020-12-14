@@ -16,16 +16,15 @@ from .xqml_utils import getstokes, progress_bar, GetBinningMatrix
 import _libcov as clibcov
 
 
-def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
+def compute_ds_dcb( bins, nside, ipok, bl, clth, Slmax, spec,
                     pixwin=True, verbose=False, MC=0, Sonly=False, openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
     Parameters
     ----------
-    ellbins : array of floats
-        Lowers bounds of bins. Example : taking ellbins = (2, 3, 5) will
-        compute the spectra for bins = (2, 3.5).
+    bins : Bins class
+        bounds for bins in multipole
     nside : int
         Healpix map resolution
     ipok : array of ints
@@ -68,7 +67,7 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     >>> print(round(np.sum(Pl),5), round(np.sum(S),5))
     (1149.18805, 23675.10206)
     """
-    if Slmax < ellbins[-1]-1:
+    if Slmax < bins.lmax:
         print("WARNING : Slmax < lmax")
 
     # ### define pixels
@@ -89,35 +88,31 @@ def compute_ds_dcb( ellbins, nside, ipok, bl, clth, Slmax, spec,
     if Sonly:
         if MC:
             S = S_bins_MC(
-                ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec,
+                bins.lmins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec,
                 pixwin=pixwin, verbose=verbose)
         else:
             S = compute_S(
-                ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec,
+                bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, spec,
                 pixwin=pixwin, verbose=verbose)
         return S
     
     if MC:
-        Pl, S = covth_bins_MC(
-            ellbins, nside, ipok, allcosang, bl, clth, Slmax, MC,
-            spec, pixwin=pixwin, verbose=verbose)
+        Pl, S = covth_bins_MC(bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, MC, spec, pixwin=pixwin, verbose=verbose)
     elif openMP:
         fpixwin = extrapolpixwin(nside, Slmax, pixwin)
         bell = np.array([bl*fpixwin]*4)[:Slmax+1].ravel()
         stokes, spec, istokes, ispecs = getstokes(spec)
         ispec = np.zeros(6,int)
         ispec[ispecs] = 1
-        nbins = (len(ellbins)-1)*len(spec)
+        nbins = (bins.nbins)*len(spec)
         npix = len(ipok)*len(istokes)
         Pl = np.ndarray( nbins*npix**2)
-        clibcov.dSdC( nside, len(istokes), ispec, ellbins, ipok, bell, Pl)
+        clibcov.dSdC( nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell, Pl)
         Pl = Pl.reshape( nbins, npix, npix)
-        P, Q, ell, ellval = GetBinningMatrix(ellbins, Slmax)
-        S = SignalCovMatrix(Pl,np.array([P.dot(clth[isp,2:Slmax+1]) for isp in ispecs]).ravel())
+        P, Q = bins._bin_operators()
+        S = SignalCovMatrix( Pl, np.array([P.dot(clth[isp,:bins.lmax+1]) for isp in ispecs]).ravel() )
     else:
-        Pl, S = compute_PlS(
-            ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-            spec=spec, pixwin=pixwin, verbose=verbose)
+        Pl, S = compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec=spec, pixwin=pixwin, verbose=verbose)
 
     if verbose:
         print( "Construct Pl (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-tstart))
@@ -142,9 +137,7 @@ def SignalCovMatrix(Pl, model):
 
 
 
-def compute_PlS(
-        ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-        spec, pixwin=True, verbose=False):
+def compute_PlS( ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
     """
     Computes Legendre polynomes Pl = dS/dCb and signal matrix S.
 
@@ -399,9 +392,7 @@ def compute_PlS(
     return Pl, S
 
 
-def compute_S(
-        ellbins, nside, ipok, allcosang, bl, clth, Slmax,
-        spec, pixwin=True, verbose=False):
+def compute_S( ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
     """
     Computes signal matrix S.
 

@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 import sys
+import numpy as np
+import setuptools
 from distutils.core import setup, Extension
-import numpy
+#from numpy.distutils.core import setup
+#from numpy.distutils.extension import Extension
 from Cython.Distutils import build_ext
 
 # Get numpy include directory (works across versions)
 try:
-    numpy_include = numpy.get_include()
+    numpy_include = np.get_include()
 except AttributeError:
-    numpy_include = numpy.get_numpy_include()
+    numpy_include = np.get_numpy_include()
 
 print( sys.argv)
 
@@ -32,7 +35,7 @@ if USE_ICC:
         libs += ['gomp', 'iomp5']
         extra += ['-openmp']
 else:
-    extra += ['-O2']
+#    extra += ['-O2']
     if USE_OPENMP:
         libs += ['gomp']
         extra += ['-fopenmp']
