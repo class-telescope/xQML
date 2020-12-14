@@ -246,13 +246,3 @@ class xQML(object):
 
         # Return scalar product btw Pl and the fiducial spectra.
         return SignalCovMatrix( self.Pl, model)
-
-    def BinSpectra( self, clth):
-        lmax = int(self.ellbins[-1])-1
-        P, Q, ell, ellval = GetBinningMatrix(self.ellbins, lmax)
-        return( np.asarray([P.dot(clth[isp,2:lmax+1]) for isp in self.ispecs]))
-
-    def lbin( self):
-        P, Q, ell, ellval = GetBinningMatrix(self.ellbins, self.Slmax)
-        return( ellval)
-
