@@ -1,24 +1,39 @@
 #include "libcov.h"
 
-// void CrossWindowFunction( int nl, int npix, double* El, double* Pl, double* Wll)
-// {
 
-//   memset( Wll, 0., nl*nl * sizeof(double));
-
-// #pragma omp parallel default(none) shared(nl, El, Pl, Wll)
-//   {
-// #pragma omp for schedule(dynamic)
-//     for( int l1=0; l1<nl; l1++) {
-//       for( int l2=0; l2<nl; l2++) {
-	
-// 	for( int p=0; p<npix*npix; p++)
-// 	  Wll[l1*nl+l2] += El[l1][
-//       }
-//     }
-
-//   }
+//problem of precision wrt python...
+void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll)
+{
+  int64_t npixtot = npix*npix;
   
-// }
+  memset( Wll, 0., (nl*nl) * sizeof(double));
+
+#pragma omp parallel default(none) shared(nl, npixtot, El, Pl, Wll)
+  {
+#pragma omp for schedule(dynamic)
+    for( int l1=0; l1<nl; l1++) {
+      for( int l2=0; l2<nl; l2++) {
+	
+	for( int p=0; p<npixtot; p++)
+	  Wll[l1*nl+l2] += El[l1*npixtot+p]*Pl[l2*npixtot+ p];
+	
+      } //loop l2
+    } //loop l1
+    
+  } //end omp parallel
+
+//   fprintf( stdout, "E[13] = ");
+//   for( int p=0; p<10; p++) fprintf( stdout, "%f\t", El[13*npixtot+p]);
+//   fprintf( stdout, "\n");
+//   fprintf( stdout, "P[4] = ");
+//   for( int p=0; p<10; p++) fprintf( stdout, "%f\t", Pl[4*npixtot+p]);
+//   fprintf( stdout, "\n");
+//   fprintf( stdout, "E[13]*P[4] = ");
+//   for( int p=0; p<10; p++) fprintf( stdout, "%f\t", El[13*npixtot+p]*Pl[4*npixtot+p]);
+//   fprintf( stdout, "\n");
+//   fprintf( stdout, "Wll[%d,%d]=%f\n", 13, 4, Wll[13*nl+4]);
+  
+}
 
 
 void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)

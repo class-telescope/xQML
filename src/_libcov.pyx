@@ -11,6 +11,7 @@ np.import_array()
 
 
 cdef extern from "libcov.h":
+     void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll)
      void build_dSdC( int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
      void dlss( double X, int s1, int s2, int lmax, double *d)
      int polrotangle( double *ri, double *rj, double *cos2a, double *sin2a)
@@ -29,6 +30,13 @@ def dSdC( nside, nstokes,
 		 <double*> np.PyArray_DATA(bl),
 		 <double*> np.PyArray_DATA(dSdC))
 
+def CrossWindow( np.ndarray[double, ndim=3, mode="c"] El not None,
+		 np.ndarray[double, ndim=3, mode="c"] Pl not None,
+		 np.ndarray[double, ndim=1, mode="c"] Wll not None):
+    build_Wll( len(El), len(Pl[0]), 
+	       <double*> np.PyArray_DATA(El),
+	       <double*> np.PyArray_DATA(Pl),
+	       <double*> np.PyArray_DATA(Wll))
 
 def _dlss( X, s1, s2, lmax, np.ndarray[double, ndim=1, mode="c"] d not None):
      dlss( X, s1, s2, lmax, <double*> np.PyArray_DATA(d))

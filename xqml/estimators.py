@@ -1,13 +1,15 @@
 """
-Set of routines to ...
-
-Author: Vanneste
+Set of routines generating the estimators for xQML code
 """
 from __future__ import division
 
 import numpy as np
+import _libcov as clibcov
+import timeit
+import threading
 
 
+#
 def Pl(ds_dcb):
     """
     Reshape ds_dcb (nspec, nbins) into Pl (nspec * nbins)
@@ -41,7 +43,7 @@ def Pl(ds_dcb):
     nnpix = np.shape(ds_dcb)[-1]
     return np.copy(ds_dcb).reshape(2 * (np.shape(ds_dcb)[1]), nnpix, nnpix)
 
-
+#
 def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, corr=False):
     """
     Compute correlation matrix S = sum_l Pl*Cl
@@ -101,9 +103,10 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, corr=False):
     return S
 
 
-def El(invCAA, invCBB, Pl):
+def El(invCAA, invCBB, Pl, thread=False, verbose=False):
     """
     Compute El = CAA^-1.Pl.CBB^-1
+    (Note: El is not symmetric for cross)
 
     Parameters
     ----------
@@ -136,16 +139,40 @@ def El(invCAA, invCBB, Pl):
 
     """
 
-    El = [np.dot(np.dot(invCAA, P), invCBB) for P in Pl]
+    tstart = timeit.default_timer()
+    nl = len(Pl)
+    npix = len(Pl[0])
+
+    if thread:
+        #Note: longer than with list...
+        El = np.ndarray( np.shape(Pl))
+        def CPC( l):
+            El[l] = np.dot(np.dot(invCAA, Pl[l]), invCBB)
+        procs = []
+        for l in range(nl):
+            proc = threading.Thread(target=CPC,args=(l,))
+            procs.append(proc)
+
+        for proc in procs:
+            proc.start()
+        for proc in procs:
+            proc.join()
+
+    else:
+        El = [np.dot(np.dot(invCAA, P), invCBB) for P in Pl]
+
+    if verbose:
+        print( "Construct El (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
 
     return El
 
 
-def CrossWindowFunction(El, Pl):
+
+def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
     """
     Compute mode-mixing matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
-    Use the trick with matrices: Trace[A.B] = sum(A x B) (where . is the matrix product and x the elementwise mult)
+    Use the trick with matrices: Trace[A.B] = sum(A x B^T) (where . is the matrix product and x the elementwise mult)
     
     Parameters
     ----------
@@ -169,11 +196,39 @@ def CrossWindowFunction(El, Pl):
      [134 478 822]]
     """
     nl = len(El)
-    
-    # No transpose because E symm
-    Wll = np.asarray( [np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
-    
+
+    tstart = timeit.default_timer()
+
+    if openMP:
+        #pb of precision (sum of +/- big numbers)
+        Wll = np.ndarray( nl*nl)
+        clibcov.CrossWindow( np.asarray(El), Pl, Wll)
+        Wll = Wll.reshape(nl,nl)
+    elif thread:
+        #gain a factor 2.5 on npix=600
+        Wll = np.ndarray( (nl, nl))
+        def EP( l1, l2):
+            Wll[l1,l2] = np.sum( El[l1]*Pl[l2])
+        procs = []
+        for l1 in range(nl):
+            for l2 in range(nl):                
+                proc = threading.Thread(target=EP, args=(l1,l2,))
+                procs.append(proc)
+
+        for proc in procs:
+                proc.start()
+        for proc in procs:
+                proc.join()
+        
+    else:
+        # No transpose because P symm
+        Wll = np.asarray( [np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
+
+    if verbose:
+        print( "Construct Wll (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
+
     return Wll
+
 
 
 def CrossWindowFunctionLong(invCAA, invCBB, Pl):
@@ -214,6 +269,7 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     return Wll
 
 
+
 def CrossGisherMatrix(El, CAB):
     """
     Compute matrix GAB = Trace[El.CAB.El.CAB]
@@ -241,9 +297,10 @@ def CrossGisherMatrix(El, CAB):
     nl = len(El)
 
     El_CAB = [np.dot(CAB, E) for E in El]
-    GAB = np.asarray([np.sum(Ei * Ej.T) for Ei in El_CAB for Ej in El_CAB]).reshape(nl,nl)
+    GAB = [np.sum(Ei * Ej.T) for Ei in El_CAB for Ej in El_CAB]
     
-    return GAB
+    return np.asarray(GAB).reshape(nl,nl)
+
 
 
 def CrossGisherMatrixLong(El, CAB):
@@ -273,10 +330,8 @@ def CrossGisherMatrixLong(El, CAB):
     """
     lmax = len(El)
     lrange = np.arange(lmax)
-    GAB = np.asarray(
-        [np.sum(np.dot(CAB, El[il]) * np.dot(CAB, El[jl]).T)
-         for il in lrange for jl in lrange]).reshape(lmax, lmax)
-    return GAB
+    GAB = [np.sum(np.dot(CAB, El[il]) * np.dot(CAB, El[jl]).T) for il in lrange for jl in lrange]
+    return np.asarray(GAB).reshape(lmax, lmax)
 
 
 def yQuadEstimator(dA, dB, El):
@@ -291,7 +346,7 @@ def yQuadEstimator(dA, dB, El):
         Pixels dataset B
     El : ndarray of floats
         Quadratic parameter matrices such that yl = dA.El.dB.T
-
+    
     Returns
     ----------
     >>> dA = np.arange(12)
@@ -370,6 +425,7 @@ def CovAB(invWll, GAB):
     """
     covAB = np.dot(np.dot(invWll, GAB), invWll.T) + invWll
     return covAB
+
 
 
 if __name__ == "__main__":

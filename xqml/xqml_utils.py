@@ -1,7 +1,5 @@
 """
-Set of routines to ...
-
-Author: Vanneste
+Utils for xQML code
 """
 from __future__ import division
 
@@ -13,6 +11,10 @@ from scipy import linalg, sparse
 
 
 def pd_inv(a):
+    '''
+    Quicker to inverse for pixel-pixel matrices
+    (almost 5x quicker)
+    '''
     n = a.shape[0]
     I = np.identity(n)
     return linalg.solve(a, I, sym_pos = True, overwrite_b = True)
@@ -62,57 +64,6 @@ def getstokes(spec):
     return stokes, spec, istokes, ispecs
 
 
-def ComputeSizeDs_dcb(nside, fsky, deltal=1, unit="Gb"):
-    """
-    ???
-
-    Parameters
-    ----------
-    nside : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    if units[0].lower() == "g":
-        toGB = 1024. * 1024. * 1024.
-    else:
-        toGB = 1.
-
-    nspec = 2
-    nell = nspec * (3.*nside-1) /deltal
-    npixtot = 2*12*nside**2*fsky
-    sizeds_dcb = (npixtot)**2 * (nell + 5)
-
-    return( 8.* sizeds_dcb / toGB)
-#    print("size (Gb) = " + str(sizeds_dcb))
-
-
-def get_colors(num_colors):
-    """
-    ???
-
-    Parameters
-    ----------
-    num_colors : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    import colorsys
-    colors = []
-    ndeg = 250.
-    for i in np.arange(0., ndeg, ndeg / num_colors):
-        hue = i/360.
-        lightness = 0.5
-        saturation = 0.7
-        colors.append(colorsys.hls_to_rgb(hue, lightness, saturation))
-    return np.array(colors)
-
-
 def progress_bar(i, n):
     """
     ???
@@ -142,93 +93,7 @@ def progress_bar(i, n):
         sys.stdout.flush()
 
 
-def check_symmetric(a, tol=1e-8):
-    """
-    ???
 
-    Parameters
-    ----------
-    a : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    return np.allclose(a, a.T, atol=tol)
-
-
-def randomword(length):
-    """
-    ???
-
-    Parameters
-    ----------
-    length : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    return ''.join(rd.choice(string.lowercase) for i in range(length))
-
-
-def cov_from_maps(maps0, maps1):
-    """
-    ???
-
-    Parameters
-    ----------
-    maps0 : ???
-        ???
-
-    Returns
-    ----------
-    ???
-    """
-    sh = np.shape(maps0)
-    npix = sh[1]
-    nbmc = sh[0]
-    covmc = np.zeros((npix, npix))
-    mm0 = np.mean(maps0, axis=0)
-    # print(mm0)
-    mm1 = np.mean(maps1, axis=0)
-    # print(mm1)
-    themaps0 = np.zeros((nbmc, npix))
-    themaps1 = np.zeros((nbmc, npix))
-    start = timeit.default_timer()
-    for i in np.arange(npix):
-        progress_bar(i, npix, timeit.default_timer()-start)
-        themaps0[:, i] = maps0[:, i] - mm0[i]
-        themaps1[:, i] = maps1[:, i] - mm1[i]
-    print('hy')
-    start = timeit.default_timer()
-    for i in np.arange(npix):
-        progress_bar(i, npix, timeit.default_timer()-start)
-        for j in np.arange(npix):
-            covmc[i, j] = np.mean(themaps0[:, i] * themaps1[:, j])
-    return(covmc)
-
-
-def IsInvertible(F):
-    """
-    ???
-
-    Parameters
-    ----------
-    F : ???
-        ???
-    ...
-
-    Returns
-    ----------
-    ??? : ???
-        ???
-    """
-    eps = np.finfo(F.dtype).eps
-    print("Cond Numb = ", np.linalg.cond(F), "Matrix eps=", eps)
-    return np.linalg.cond(F) > np.finfo(F.dtype).eps
 
 
 
@@ -342,12 +207,12 @@ def GetBinningMatrix( ellbins, lmax, norm=False):
 
 
 class symarray(np.ndarray):
-
-    # wrapper class for numpy array for symmetric matrices. New attribute can pack matrix to optimize storage.
-    # Usage:
-    # If you have a symmetric matrix A as a shape (n,n) numpy ndarray, Sym(A).packed is a shape (n(n+1)/2,) numpy array 
-    # that is a packed version of A.  To convert it back, just wrap the flat list in Sym().  Note that Sym(Sym(A).packed)
-
+    '''
+    wrapper class for numpy array for symmetric matrices. New attribute can pack matrix to optimize storage.
+    Usage:
+    If you have a symmetric matrix A as a shape (n,n) numpy ndarray, Sym(A).packed is a shape (n(n+1)/2,) numpy array 
+    that is a packed version of A.  To convert it back, just wrap the flat list in Sym().  Note that Sym(Sym(A).packed)
+    '''
     def __new__(cls, input_array):
         obj = np.asarray(input_array).view(cls)
 

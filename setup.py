@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import sys
-#import hooks
 from distutils.core import setup, Extension
 import numpy
 from Cython.Distutils import build_ext
@@ -33,7 +32,7 @@ if USE_ICC:
         libs += ['gomp', 'iomp5']
         extra += ['-openmp']
 else:
-    extra += ['-O4']
+    extra += ['-O2']
     if USE_OPENMP:
         libs += ['gomp']
         extra += ['-fopenmp']
@@ -47,13 +46,12 @@ libcov = Extension( name="_libcov",
                     extra_compile_args=extra
                     )
 
-
-
 setup(name="xqml",
       description="Code for xQML",
       author="S. Vanneste & M. Tristram",
       version="0.1",
       packages=['xqml'],
       ext_modules=[libcov],
+      install_requires=["numpy","scipy>=1.1.0","healpy>=0.6.1"],
       cmdclass={'build_ext': build_ext}
       )

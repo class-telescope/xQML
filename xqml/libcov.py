@@ -1,7 +1,5 @@
 """
 Set of routines to ...
-
-Author: Vanneste
 """
 from __future__ import division
 

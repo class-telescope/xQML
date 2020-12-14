@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-/* #include <chealpix.h> */
 
 #define OK 0
 #define NOK 1
@@ -11,6 +10,9 @@
 
 #define dSdC(L,I,J) dSdC[ (L)*(npixtot*npixtot) + (I)*npixtot + (J)]
 #define halfpi M_PI/2.
+
+void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll);
+
 
 void build_dSdC( int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC);
 /**

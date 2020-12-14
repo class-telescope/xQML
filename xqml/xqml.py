@@ -1,8 +1,6 @@
 """
 (Cross-) power spectra estimation using the QML method.
 [Vanneste et al. 2018, arXiv:1807.02484]
-
-Author: Vanneste
 """
 from __future__ import division
 
@@ -10,7 +8,7 @@ import sys
 import timeit
 import string
 
-from scipy import linalg
+#from scipy import linalg
 
 import numpy as np
 import healpy as hp
@@ -41,7 +39,7 @@ class xQML(object):
         mask : 1D array of booleans
             Mask defining the region of interest (of value True)
         bins : 1D array of floats (nbin+1)
-            lower multipole bin
+            lower multipole for each bin
         clth : ndarray of floats
             Array containing fiducial CMB spectra (unbinned)
         lmax : int
@@ -128,7 +126,7 @@ class xQML(object):
                                           self.spec, pixwin=self.pixwin, verbose=verbose, MC=MC, openMP=openMP)
         return( self.Pl, self.S)
 
-    def construct_esti(self, NA, NB=None, verbose=False):
+    def construct_esti(self, NA, NB=None, verbose=False, thread=False):
         """
         Compute the inverse of the datasets pixel covariance matrices C,
         the quadratic matrix parameter E, and inverse of the window
@@ -154,11 +152,11 @@ class xQML(object):
         # Invert (signalB + noise) matrix
         invCb = pd_inv(self.S + self.NB)
 
-        # Compute El = Ca^-11.Pl.Cb^-1 (long)
-        self.El = El(invCa, invCb, self.Pl)
+        # Compute El = Ca^-1.Pl.Cb^-1 (long)
+        self.El = El(invCa, invCb, self.Pl, thread=thread, verbose=verbose)
         
-        # Finally compute invW by inverting (long)
-        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl))
+        # Finally compute invW by inverting (longer)
+        self.invW = np.linalg.inv(CrossWindowFunction(self.El, self.Pl, thread=thread, verbose=verbose))
         
         # Compute bias for auto
 #        if not self.cross:
