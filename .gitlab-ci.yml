@@ -9,6 +9,7 @@ stages:
 
   script:
     - pip install numpy
+    - pip install cython
     - python setup.py install
     - python -m unittest xqml.tests.test_xqml
 
