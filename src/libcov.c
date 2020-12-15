@@ -21,42 +21,23 @@ void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll)
     } //loop l1
     
   } //end omp parallel
-
-//   fprintf( stdout, "E[13] = ");
-//   for( int p=0; p<10; p++) fprintf( stdout, "%f\t", El[13*npixtot+p]);
-//   fprintf( stdout, "\n");
-//   fprintf( stdout, "P[4] = ");
-//   for( int p=0; p<10; p++) fprintf( stdout, "%f\t", Pl[4*npixtot+p]);
-//   fprintf( stdout, "\n");
-//   fprintf( stdout, "E[13]*P[4] = ");
-//   for( int p=0; p<10; p++) fprintf( stdout, "%f\t", El[13*npixtot+p]*Pl[4*npixtot+p]);
-//   fprintf( stdout, "\n");
-//   fprintf( stdout, "Wll[%d,%d]=%f\n", 13, 4, Wll[13*nl+4]);
   
 }
 
 
 void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
 {
-  const int lmax=ellbins[nbin]-1;
-  const int lmax1 = lmax+1;
-  const int ns=3, nspecall = 6;
   const int nspec = ispec2nspec(ispec);
-//   const int nspec = nstokes2nspec(nstokes);
   const int64_t npixtot = npix*nstokes;
 
-//   fprintf( stdout, "lmax=%d\n", lmax);
-//   fprintf( stdout, "npix=%d\n", npix);
-//   fprintf( stdout, "nstokes=%d\n", nstokes);
-//   fprintf( stdout, "nspec=%d\n", nspec);
-
   int64_t ntot = nspec*nbin*npixtot*npixtot;
-//   fprintf( stdout, "memset (%d,%d,%d,%d = %lld)...\n", nspec,nbin,nstokes,npix,ntot);
   memset( dSdC, 0., ntot * sizeof(double));
-//   fprintf( stdout, "ispec = (%d,%d,%d,%d,%d,%d)\n", ispec[0],ispec[1],ispec[2],ispec[3],ispec[4],ispec[5]);
 
 #pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins,ispec)
   {
+    const int lmax=ellbins[nbin]-1;
+    const int lmax1 = lmax+1;
+    const int ns=3, nspecall = 6;
     int s=0;
     double vr[3], vc[3];
     double **dSdCpix=NULL;
@@ -81,7 +62,6 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *
 	QML_compute_dSdC( vr, vc, lmax, ispec, dSdCpix);
 
 	for( int ib=0; ib<nbin; ib++) {
-// 	  int l=ellbins[ib];
  	  for( int l=ellbins[ib]; l<=ellbins[ib+1]-1; l++) {
 	    s=0;
 
@@ -142,10 +122,9 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *
     /* free */
     for( int l=0; l<nspecall*lmax1; l++) free( dSdCpix[l]);
     free( dSdCpix);
+
   } //end omp parallel
 
-
-//   return( dSdC);
 }
 
 
