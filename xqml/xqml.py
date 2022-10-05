@@ -124,17 +124,10 @@ class xQML(object):
                 self.S = S
         
         if NA is not None:
-            self.construct_esti(NA=NA, NB=NB, verbose=verbose)
-    
-    def compute_dSdC( self, clth, lmax=None, verbose=True, MC=False, openMP=True):
-        if lmax is None:
-            lmax = 2*self.nside-1   #Why ?
-        
-        self.Pl, self.S = compute_ds_dcb( self.bins, self.nside, self.ipok, self.bl, clth, lmax,
-                                          self.spec, pixwin=self.pixwin, verbose=verbose, MC=MC, openMP=openMP)
-        return( self.Pl, self.S)
-    
-    def construct_esti(self, NA, NB=None, verbose=False, thread=False):
+            self.construct_esti(NA=NA, NB=NB, verbose=verbose, thread=True)
+
+
+    def construct_esti(self, NA, NB, verbose=False, thread=False):
         """
         Compute the inverse of the datasets pixel covariance matrices C,
         the quadratic matrix parameter E, and inverse of the window
@@ -148,28 +141,26 @@ class xQML(object):
             Noise covariance matrix of dataset B
 
         """
-        self.cross = NB is not None
-        self.NA = NA
-        self.NB = NB if self.cross else NA
+        
 
         tstart = timeit.default_timer()
         
         # Invert (signalA + noise) matrix
-        invCa = pd_inv(self.S + self.NA)
+        invCa = pd_inv(self.S + NA)
 
         # Invert (signalB + noise) matrix
-        invCb = pd_inv(self.S + self.NB)
+        invCb = pd_inv(self.S + NB)
         
         # Compute El = Ca^-1.Pl.Cb^-1 (long)
         self.El = El(invCa, invCb, self.Pl, thread=thread, verbose=verbose)
         
         # Finally compute invW by inverting (longer)
-        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, thread=thread, verbose=verbose))
+        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, openMP=thread, thread=thread, verbose=verbose))
         
         # Compute bias for auto
-#        if not self.cross:
-#            self.bias = biasQuadEstimator(self.NA, self.El)
-        self.bias = biasQuadEstimator(self.NA, self.El)
+        if not self.cross:
+            self.bias = biasQuadEstimator(NA, self.El)
+        # self.bias = biasQuadEstimator(self.NA, self.El)
         
         if verbose:
             print( "Construct estimator: %.1f sec" % (timeit.default_timer()-tstart))
@@ -229,7 +220,7 @@ class xQML(object):
         # # Do V = W^-1.G.W^-1 + W^-1
         V = CovAB(self.invW, G)
 
-        return(V)
+        return V
 
     def _SignalCovMatrix(self, clth):
         """
