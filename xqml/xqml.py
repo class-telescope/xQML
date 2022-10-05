@@ -28,12 +28,12 @@ from .estimators import biasQuadEstimator
 from .libcov import compute_ds_dcb, S_bins_MC, compute_S, covth_bins_MC, compute_PlS, SignalCovMatrix
 
 
-__all__ = ['xQML','Bins']
+__all__ = ['xQML', 'Bins']
 
 
 class xQML(object):
     """ Main class to handle the spectrum estimation """
-    def __init__( self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
+    def __init__(self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
                   S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True):
         """
         Parameters
@@ -126,8 +126,7 @@ class xQML(object):
         if NA is not None:
             self.construct_esti(NA=NA, NB=NB, verbose=verbose, thread=True)
 
-
-    def construct_esti(self, NA, NB, verbose=False, thread=False):
+    def construct_esti(self, NA, NB, verbose=False, thread=True):
         """
         Compute the inverse of the datasets pixel covariance matrices C,
         the quadratic matrix parameter E, and inverse of the window
@@ -139,9 +138,9 @@ class xQML(object):
             Noise covariance matrix of dataset A
         NB : 2D array
             Noise covariance matrix of dataset B
-
+        thread: bool=True
+            do OMP or threading
         """
-        
 
         tstart = timeit.default_timer()
         
@@ -163,33 +162,29 @@ class xQML(object):
         # self.bias = biasQuadEstimator(self.NA, self.El)
         
         if verbose:
-            print( "Construct estimator: %.1f sec" % (timeit.default_timer()-tstart))
+            print("Construct estimator: %.1f sec" % (timeit.default_timer()-tstart))
 
-
-    def get_spectra(self, mapA, mapB=None):
+    def __call__(self, mapA, mapB=None):
         """
         Return the unbiased spectra
-
         Parameters
         ----------
-        map1 : 1D array
-            Pixel map number 1
-        map2 : 2D array
-            Pixel map number 2
-
+        mapA, mapB : 1D array
+            Pixel map number 1/2. The maps should have shape (3, npix) or (nstoeks*npix_masked), in the former case, the
+            masking will be applied to the maps.
         Returns
         ----------
         cl : array or sequence of arrays
-            Returns cl or a list of cl's (TT, EE, BB, TE, EB, TB)
+            Returns cl or a list of cl's (TT, EE, BB, TE, TB, EB)
         """
         # Define conditions based on the map size
-        self.cross = mapB is not None
+        if self.cross:
+            assert mapB is not mapA, "can't use the same map for cross spectra."
         cond_sizeA = np.size(mapA) == self.nstokes * self.npix
         dA = mapA if cond_sizeA else mapA[self.istokes][:,self.mask]
         if self.cross:
             cond_sizeB = np.size(mapB) == self.nstokes * self.npix
             dB = mapB if cond_sizeB else mapB[self.istokes][:,self.mask]
-
             yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
         else:
             yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
@@ -211,15 +206,13 @@ class xQML(object):
 
         """
         # # Do Gll' = S^-1.El.S^-1.El'
-        cross = self.cross if cross is None else cross
-        if cross:
+        if self.cross:
             G = CrossGisherMatrix(self.El, self.S)
         else:
             G = CrossGisherMatrix(self.El, self.S + self.NA)
 
         # # Do V = W^-1.G.W^-1 + W^-1
         V = CovAB(self.invW, G)
-
         return V
 
     def _SignalCovMatrix(self, clth):

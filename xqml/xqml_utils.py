@@ -26,7 +26,7 @@ def getstokes(spec):
 
     Parameters
     ----------
-    spec : bool
+    spec : tuple, list
         If True, get Stokes parameters for polar (default: True)
 
     Returns
@@ -44,12 +44,12 @@ def getstokes(spec):
     (['Q', 'U'], ['EE', 'BB'], [1, 2])
     >>> getstokes(['TT','EE','BB','TE'])
     (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE'], [0, 1, 2, 3])
-    >>> getstokes(['TT', 'EE', 'BB', 'TE', 'EB', 'TB'])
-    (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'EB', 'TB'], [0, 1, 2, 3, 4, 5])
+    >>> getstokes(['TT', 'EE', 'BB', 'TE', 'TB', 'EB'])
+    (['I', 'Q', 'U'], ['TT', 'EE', 'BB', 'TE', 'TB', 'EB'], [0, 1, 2, 3, 4, 5])
     """
-    _temp  = "TT" in spec or "TE" in spec or "TB" in spec
+    _temp = "TT" in spec or "TE" in spec or "TB" in spec
     _polar = "EE" in spec or "BB" in spec or "TE" in spec or "TB" in spec or "EB" in spec
-    _corr  = "TE" in spec or "TB" in spec or "EB" in spec
+    _corr = "TE" in spec or "TB" in spec or "EB" in spec
     if not _temp and not _polar and not _corr:
         print("invalid spectra list and/or no options")
     
@@ -83,11 +83,7 @@ def progress_bar(it,ntot,name=""):
     sys.stdout.flush()
 
 
-
-
-
-
-def GetBinningMatrix( ellbins, lmax, norm=False):
+def GetBinningMatrix(ellbins, lmax, norm=False):
     """
     Return P (m,n) and Q (n,m) binning matrices such that
     Cb = P.Cl and Vbb = P.Vll.Q with m the number of bins and
@@ -189,10 +185,6 @@ def GetBinningMatrix( ellbins, lmax, norm=False):
         P *= binsnorm
 
     return P, Q, ell, ellval
-
-
-
-
 
 
 class symarray(np.ndarray):

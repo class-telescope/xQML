@@ -9,7 +9,6 @@ import timeit
 import threading
 
 
-#
 def Pl(ds_dcb):
     """
     Reshape ds_dcb (nspec, nbins) into Pl (nspec * nbins)
@@ -43,7 +42,7 @@ def Pl(ds_dcb):
     nnpix = np.shape(ds_dcb)[-1]
     return np.copy(ds_dcb).reshape(2 * (np.shape(ds_dcb)[1]), nnpix, nnpix)
 
-#
+
 def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, corr=False):
     """
     Compute correlation matrix S = sum_l Pl*Cl
@@ -145,8 +144,8 @@ def El(invCAA, invCBB, Pl, thread=False, verbose=False):
 
     if thread:
         #Note: longer than with list...
-        El = np.ndarray( np.shape(Pl))
-        def CPC( l):
+        El = np.ndarray(np.shape(Pl))
+        def CPC(l):
             El[l] = np.dot(np.dot(invCAA, Pl[l]), invCBB)
         procs = []
         for l in range(nl):
@@ -162,10 +161,9 @@ def El(invCAA, invCBB, Pl, thread=False, verbose=False):
         El = [np.dot(np.dot(invCAA, P), invCBB) for P in Pl]
 
     if verbose:
-        print( "Construct El (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
+        print("Construct El (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
 
     return El
-
 
 
 def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
@@ -201,12 +199,12 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
 
     if openMP:
         #pb of precision (sum of +/- big numbers)
-        Wll = np.ndarray( nl*nl)
-        clibcov.CrossWindow( np.asarray(El), Pl, Wll)
+        Wll = np.ndarray(nl*nl)
+        clibcov.CrossWindow(np.asarray(El), Pl, Wll)
         Wll = Wll.reshape(nl,nl)
     elif thread:
         #gain a factor 2.5 on npix=600
-        Wll = np.ndarray( (nl, nl))
+        Wll = np.ndarray((nl, nl))
         def EP( l1, l2):
             Wll[l1,l2] = np.sum( El[l1]*Pl[l2])
         procs = []
@@ -216,19 +214,18 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
                 procs.append(proc)
 
         for proc in procs:
-                proc.start()
+            proc.start()
         for proc in procs:
-                proc.join()
+            proc.join()
         
     else:
         # No transpose because P symm
-        Wll = np.asarray( [np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
+        Wll = np.asarray([np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
 
     if verbose:
-        print( "Construct Wll (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
+        print("Construct Wll (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
 
     return Wll
-
 
 
 def CrossWindowFunctionLong(invCAA, invCBB, Pl):
@@ -269,7 +266,6 @@ def CrossWindowFunctionLong(invCAA, invCBB, Pl):
     return Wll
 
 
-
 def CrossGisherMatrix(El, CAB):
     """
     Compute matrix GAB = Trace[El.CAB.El.CAB]
@@ -300,7 +296,6 @@ def CrossGisherMatrix(El, CAB):
     GAB = [np.sum(Ei * Ej.T) for Ei in El_CAB for Ej in El_CAB]
     
     return np.asarray(GAB).reshape(nl,nl)
-
 
 
 def CrossGisherMatrixLong(El, CAB):
@@ -425,7 +420,6 @@ def CovAB(invWll, GAB):
     """
     covAB = np.dot(np.dot(invWll, GAB), invWll.T) + invWll
     return covAB
-
 
 
 if __name__ == "__main__":
