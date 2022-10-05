@@ -1,4 +1,7 @@
-xQML
+# xQML
+
+Forked for customization. Below are the original README:
+
 
 a quadratic Power Spectrum estimator based on cross-correlation between maps.<br>
 [Vanneste et al., 2018, https://arxiv.org/abs/1807.02484]
@@ -18,5 +21,8 @@ Librairies needed are :
 - scipy
 - numpy
 - healpy
+
+
+=======
 
 
