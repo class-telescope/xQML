@@ -17,4 +17,5 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+.idea/
 src/_libcov.c
