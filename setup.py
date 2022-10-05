@@ -13,7 +13,7 @@ try:
 except AttributeError:
     numpy_include = np.get_numpy_include()
 
-print( sys.argv)
+print(sys.argv)
 
 if '--disable-openmp' in sys.argv:
     sys.argv.pop(sys.argv.index('--disable-openmp'))
@@ -27,7 +27,7 @@ if '--icc' in sys.argv:
 else:
     USE_ICC = False
 
-libs = ['m']
+libs = ['openblas', 'm']
 
 extra = ['-std=gnu99']
 if USE_ICC:
@@ -35,24 +35,24 @@ if USE_ICC:
         libs += ['gomp', 'iomp5']
         extra += ['-openmp']
 else:
-#    extra += ['-O2']
+   # extra += ['-O2']
     if USE_OPENMP:
         libs += ['gomp']
         extra += ['-fopenmp']
 
 
-libcov = Extension( name="_libcov",
-                    sources=["src/libcov.c","src/_libcov.pyx"],
-                    libraries=libs,
-                    include_dirs=['src', numpy_include],
-                    library_dirs=["src"],
-                    extra_compile_args=extra
-                    )
+libcov = Extension(name="xqml._libcov",
+                   sources=["src/libcov.c","src/_libcov.pyx"],
+                   libraries=libs,
+                   include_dirs=['src', numpy_include],
+                   library_dirs=["src"],
+                   extra_compile_args=extra
+                   )
 
 setup(name="xqml",
       description="Code for xQML",
       author="S. Vanneste & M. Tristram",
-      version="0.1",
+      version="0.2",
       packages=['xqml'],
       ext_modules=[libcov],
       install_requires=["numpy","scipy>=1.1.0","healpy>=0.6.1"],

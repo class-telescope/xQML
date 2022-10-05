@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <cblas.h>
 
 #define OK 0
 #define NOK 1
@@ -10,6 +11,8 @@
 
 #define dSdC(L,I,J) dSdC[ (L)*(npixtot*npixtot) + (I)*npixtot + (J)]
 #define halfpi M_PI/2.
+
+void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El);
 
 void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll);
 

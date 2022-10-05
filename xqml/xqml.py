@@ -96,26 +96,26 @@ class xQML(object):
         nmem = self.nspec*nbin*(self.nstokes*self.npix)**2
         toGb = 1024. * 1024. * 1024.
         if verbose:
-            print( "xQML")
-            print( "spec: ", spec)
-            print( "nbin: ", nbin)
-            print( "Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
+            print("xQML")
+            print("spec: ", spec)
+            print("nbin: ", nbin)
+            print("Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
         
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
         # Otherwise compute Pl and S from the arguments.
         # Ok, but Pl cannot be binned, otherwise S construction is not valid
         if Pl is None:
-            self.Pl, self.S = compute_ds_dcb( self.bins,
-                                              self.nside,
-                                              self.ipok,
-                                              self.bl,
-                                              clth,
-                                              self.Slmax,
-                                              self.spec,
-                                              pixwin=self.pixwin,
-                                              verbose=verbose,
-                                              openMP=True)
+            self.Pl, self.S = compute_ds_dcb(self.bins,
+                                             self.nside,
+                                             self.ipok,
+                                             self.bl,
+                                             clth,
+                                             self.Slmax,
+                                             self.spec,
+                                             pixwin=self.pixwin,
+                                             verbose=verbose,
+                                             openMP=True)
         else:
             self.Pl = Pl
             if S is None:
@@ -151,10 +151,10 @@ class xQML(object):
         invCb = pd_inv(self.S + NB)
         
         # Compute El = Ca^-1.Pl.Cb^-1 (long)
-        self.El = El(invCa, invCb, self.Pl, thread=thread, verbose=verbose)
+        self.El = El(invCa, invCb, self.Pl, openMP=True, thread=thread, verbose=verbose)
         
         # Finally compute invW by inverting (longer)
-        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, openMP=thread, thread=thread, verbose=verbose))
+        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, openMP=True, thread=thread, verbose=verbose))
         
         # Compute bias for auto
         if not self.cross:
@@ -229,4 +229,4 @@ class xQML(object):
         model = clth[self.ispecs][:,2:int(self.ellbins[-1])].ravel()
 
         # Return scalar product btw Pl and the fiducial spectra.
-        return SignalCovMatrix( self.Pl, model)
+        return SignalCovMatrix(self.Pl, model)

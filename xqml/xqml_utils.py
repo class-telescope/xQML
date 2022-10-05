@@ -17,7 +17,8 @@ def pd_inv(a):
     '''
     n = a.shape[0]
     I = np.identity(n)
-    return linalg.solve(a, I, sym_pos = True, overwrite_b = True)
+    inv = linalg.solve(a, I, sym_pos=True, overwrite_b=True, )
+    return np.ascontiguousarray(inv)
 
 
 def getstokes(spec):
@@ -233,7 +234,8 @@ class symarray(np.ndarray):
         return obj
     
     def __array_finalize__(self, obj):
-        if obj is None: return
+        if obj is None:
+            return
         self.packed = getattr(obj, 'packed', None)
 
 

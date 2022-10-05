@@ -1,5 +1,32 @@
 #include "libcov.h"
 
+void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El){
+    int64_t npixtot = npix*npix;
+    openblas_set_num_threads(1);
+    #pragma omp parallel
+    {
+        double *tmp = (double *)malloc(sizeof(double)*npixtot);
+        #pragma omp for
+        for(int i=0; i<nl; i++){
+            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+                        npix, npix,
+                        1, invCa, npix,
+                        &Pl[i*npixtot], npix,
+                        0, tmp, npix);
+            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+                        npix, npix,
+                        1, tmp, npix,
+                        invCb, npix,
+                        0, &El[i*npixtot], npix);
+            for(int j=0; j<npix;j++){
+                for(int k=0; k<j; k++){
+                    El[i*npixtot+j*npix+k] = El[i*npixtot+k*npix+j];
+                }
+            }
+   }
+   }
+}
+
 
 //problem of precision wrt python...
 void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll)

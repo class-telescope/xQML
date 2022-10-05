@@ -4,9 +4,11 @@ Set of routines generating the estimators for xQML code
 from __future__ import division
 
 import numpy as np
-import _libcov as clibcov
 import timeit
+from time import perf_counter
 import threading
+
+from . import _libcov as clibcov
 
 
 def Pl(ds_dcb):
@@ -102,7 +104,7 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, corr=False):
     return S
 
 
-def El(invCAA, invCBB, Pl, thread=False, verbose=False):
+def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
     """
     Compute El = CAA^-1.Pl.CBB^-1
     (Note: El is not symmetric for cross)
@@ -115,7 +117,11 @@ def El(invCAA, invCBB, Pl, thread=False, verbose=False):
         Inverse pixel covariance matrix of dataset B
     Pl : ndarray of floats
         Rescaled normalize Legendre polynomials dS/dCl
-
+    openMP: bool=True
+        if True, use the C-implementation to compute El
+    thread: bool=False
+        if True, use the python threading (if `openMP` is unset)
+    verbose: bool
     Returns
     ----------
     El : array of float (shape(Pl))
@@ -138,11 +144,12 @@ def El(invCAA, invCBB, Pl, thread=False, verbose=False):
 
     """
 
-    tstart = timeit.default_timer()
+    tstart = perf_counter()
     nl = len(Pl)
     npix = len(Pl[0])
-
-    if thread:
+    if openMP:
+        El = clibcov.ComputeEl(invCAA, invCBB, Pl)
+    elif thread:
         #Note: longer than with list...
         El = np.ndarray(np.shape(Pl))
         def CPC(l):
@@ -156,12 +163,11 @@ def El(invCAA, invCBB, Pl, thread=False, verbose=False):
             proc.start()
         for proc in procs:
             proc.join()
-
     else:
-        El = [np.dot(np.dot(invCAA, P), invCBB) for P in Pl]
+        El = np.array([np.linalg.multi_dot([invCAA, P, invCBB]) for P in Pl])
 
     if verbose:
-        print("Construct El (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
+        print("Construct El (nl=%d): %.1f sec" % (nl, perf_counter()-tstart))
 
     return El
 
@@ -195,18 +201,18 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
     """
     nl = len(El)
 
-    tstart = timeit.default_timer()
+    tstart = perf_counter()
 
     if openMP:
         #pb of precision (sum of +/- big numbers)
         Wll = np.ndarray(nl*nl)
-        clibcov.CrossWindow(np.asarray(El), Pl, Wll)
+        clibcov.CrossWindow(El, Pl, Wll)
         Wll = Wll.reshape(nl,nl)
     elif thread:
         #gain a factor 2.5 on npix=600
         Wll = np.ndarray((nl, nl))
         def EP( l1, l2):
-            Wll[l1,l2] = np.sum( El[l1]*Pl[l2])
+            Wll[l1,l2] = np.sum(El[l1]*Pl[l2])
         procs = []
         for l1 in range(nl):
             for l2 in range(nl):                
@@ -220,11 +226,10 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
         
     else:
         # No transpose because P symm
-        Wll = np.asarray([np.sum(E * P) for E in El for P in Pl] ).reshape(nl,nl)
+        Wll = np.asarray([np.sum(E * P) for E in El for P in Pl]).reshape(nl,nl)
 
     if verbose:
-        print("Construct Wll (nl=%d): %.1f sec" % (nl,timeit.default_timer()-tstart))
-
+        print("Construct Wll (nl=%d): %.1f sec" % (nl,perf_counter()-tstart))
     return Wll
 
 

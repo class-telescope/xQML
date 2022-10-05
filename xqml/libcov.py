@@ -12,12 +12,11 @@ from scipy import special
 
 from .simulation import extrapolpixwin
 from .xqml_utils import getstokes, progress_bar, GetBinningMatrix
+from . import _libcov as clibcov
 
-import _libcov as clibcov
 
-
-def compute_ds_dcb( bins, nside, ipok, bl, clth, Slmax, spec,
-                    pixwin=True, verbose=False, MC=0, Sonly=False, openMP=True):
+def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbose=False, MC=0, Sonly=False,
+                   openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -82,9 +81,9 @@ def compute_ds_dcb( bins, nside, ipok, bl, clth, Slmax, spec,
     if len(clth) == 4:
         clth = np.concatenate((clth,clth[0:2]*0.))
 
-    temp  = "TT" in spec
+    temp = "TT" in spec
     polar = "EE" in spec or "BB" in spec
-    corr  = "TE" in spec or "TB" in spec or "EB" in spec
+    corr = "TE" in spec or "TB" in spec or "EB" in spec
     if Sonly:
         if MC:
             S = S_bins_MC(
@@ -106,20 +105,18 @@ def compute_ds_dcb( bins, nside, ipok, bl, clth, Slmax, spec,
         ispec[ispecs] = 1
         nbins = (bins.nbins)*len(spec)
         npix = len(ipok)*len(istokes)
-        Pl = np.ndarray( nbins*npix**2)
-        clibcov.dSdC( nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell, Pl)
-        Pl = Pl.reshape( nbins, npix, npix)
+        Pl = np.ndarray(nbins*npix**2)
+        clibcov.dSdC(nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell, Pl)
+        Pl = Pl.reshape(nbins, npix, npix)
         P, Q = bins._bin_operators()
-        S = SignalCovMatrix( Pl, np.array([P.dot(clth[isp,:bins.lmax+1]) for isp in ispecs]).ravel() )
+        S = SignalCovMatrix(Pl, np.array([P.dot(clth[isp,:bins.lmax+1]) for isp in ispecs]).ravel() )
     else:
         Pl, S = compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec=spec, pixwin=pixwin, verbose=verbose)
 
     if verbose:
-        print( "Construct Pl (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-tstart))
+        print("Construct Pl (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-tstart))
     
     return Pl, S
-
-
 
 
 def SignalCovMatrix(Pl, model):
@@ -135,9 +132,7 @@ def SignalCovMatrix(Pl, model):
     return np.sum(Pl * model[:, None, None], 0)
 
 
-
-
-def compute_PlS( ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
+def compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
     """
     Computes Legendre polynomes Pl = dS/dCb and signal matrix S.
 
@@ -392,7 +387,7 @@ def compute_PlS( ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=
     return Pl, S
 
 
-def compute_S( ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
+def compute_S(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
     """
     Computes signal matrix S.
 
@@ -1117,7 +1112,6 @@ def F2l2(z, lmax):
         a2 = (ell - 1) * z * thepl2
         bla = a0 * (a1 - a2)
         return bla
-
 
 
 if __name__ == "__main__":
