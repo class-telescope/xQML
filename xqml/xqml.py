@@ -16,8 +16,8 @@ import random as rd
 
 from .bins import Bins
 
-from .xqml_utils import getstokes, pd_inv, GetBinningMatrix
 
+from . import xqml_utils as xut
 from .estimators import El
 from .estimators import CovAB
 from .estimators import CrossGisherMatrix
@@ -25,8 +25,8 @@ from .estimators import CrossWindowFunction, CrossWindowFunctionLong
 from .estimators import yQuadEstimator, ClQuadEstimator
 from .estimators import biasQuadEstimator
 
-from .libcov import compute_ds_dcb, S_bins_MC, compute_S, covth_bins_MC, compute_PlS, SignalCovMatrix
-
+from .libcov import compute_ds_dcb, SignalCovMatrix
+from . import _libcov as clibcov
 
 __all__ = ['xQML', 'Bins']
 
@@ -41,7 +41,7 @@ class xQML(object):
         mask : 1D array of booleans
             Mask defining the region of interest (of value True)
         bins : Bins class object
-            Contains informations about bins
+            Contains information about bins
         clth : ndarray of floats
             Array containing fiducial CMB spectra (unbinned)
         lmax : int
@@ -55,6 +55,7 @@ class xQML(object):
         pixwin : boolean, optional
             If True, applies pixel window function to spectra. Default: True
         """
+        
         self.bias = None
         self.cross = NB is not None
         self.NA = NA
@@ -83,7 +84,7 @@ class xQML(object):
             self.bl = bell[:self.Slmax+1]
         
         # Set the Stokes parameters needed        
-        self.stokes, self.spec, self.istokes, self.ispecs = getstokes(spec)
+        self.stokes, self.spec, self.istokes, self.ispecs = xut.getstokes(spec)
         self.nstokes = len(self.stokes)
         self.nspec = len(self.spec)
         self.pixwin = pixwin
@@ -100,22 +101,14 @@ class xQML(object):
             print("spec: ", spec)
             print("nbin: ", nbin)
             print("Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
-        
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
         # Otherwise compute Pl and S from the arguments.
         # Ok, but Pl cannot be binned, otherwise S construction is not valid
         if Pl is None:
-            self.Pl, self.S = compute_ds_dcb(self.bins,
-                                             self.nside,
-                                             self.ipok,
-                                             self.bl,
-                                             clth,
-                                             self.Slmax,
-                                             self.spec,
-                                             pixwin=self.pixwin,
-                                             verbose=verbose,
-                                             openMP=True)
+            self.Pl, self.S = compute_ds_dcb(self.bins, self.nside, self.ipok, self.bl, clth, self.Slmax,
+                                             self.spec, pixwin=self.pixwin, verbose=verbose, openMP=True)
+
         else:
             self.Pl = Pl
             if S is None:
@@ -145,10 +138,10 @@ class xQML(object):
         tstart = timeit.default_timer()
         
         # Invert (signalA + noise) matrix
-        invCa = pd_inv(self.S + NA)
+        invCa = xut.pd_inv(self.S + NA)
 
         # Invert (signalB + noise) matrix
-        invCb = pd_inv(self.S + NB)
+        invCb = xut.pd_inv(self.S + NB)
         
         # Compute El = Ca^-1.Pl.Cb^-1 (long)
         self.El = El(invCa, invCb, self.Pl, openMP=True, thread=thread, verbose=verbose)
@@ -163,8 +156,8 @@ class xQML(object):
         
         if verbose:
             print("Construct estimator: %.1f sec" % (timeit.default_timer()-tstart))
-
-    def __call__(self, mapA, mapB=None):
+        
+    def get_spectra(self, mapA, mapB=None):
         """
         Return the unbiased spectra
         Parameters
@@ -180,11 +173,11 @@ class xQML(object):
         # Define conditions based on the map size
         if self.cross:
             assert mapB is not mapA, "can't use the same map for cross spectra."
-        cond_sizeA = np.size(mapA) == self.nstokes * self.npix
-        dA = mapA if cond_sizeA else mapA[self.istokes][:,self.mask]
+        cond_sizeA = np.size(mapA)==self.nstokes * self.npix
+        dA = mapA if cond_sizeA else mapA[self.istokes][:, self.mask]
         if self.cross:
-            cond_sizeB = np.size(mapB) == self.nstokes * self.npix
-            dB = mapB if cond_sizeB else mapB[self.istokes][:,self.mask]
+            cond_sizeB = np.size(mapB)==self.nstokes * self.npix
+            dB = mapB if cond_sizeB else mapB[self.istokes][:, self.mask]
             yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
         else:
             yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
@@ -193,8 +186,8 @@ class xQML(object):
 
         # Return the reshaped set of cls
         return cl.reshape(self.nspec, -1)
-
-    def get_covariance(self, cross=None):
+    
+    def get_covariance(self):
         """
         Returns the analytical covariance of the spectrum based on the fiducial
         spectra model and pixel noise matrix.
@@ -203,13 +196,14 @@ class xQML(object):
         ----------
         V : 2D matrix array of floats
             Covariance matrix of the spectra
-
         """
         # # Do Gll' = S^-1.El.S^-1.El'
         if self.cross:
-            G = CrossGisherMatrix(self.El, self.S)
+            # G = CrossGisherMatrix(self.El, self.S)
+            G = clibcov.CrossGisher(self.S, self.El)
         else:
-            G = CrossGisherMatrix(self.El, self.S + self.NA)
+            # G = CrossGisherMatrix(self.El, self.S + self.NA)
+            G = clibcov.CrossGisher(self.S+ self.NA, self.El)
 
         # # Do V = W^-1.G.W^-1 + W^-1
         V = CovAB(self.invW, G)
@@ -224,9 +218,30 @@ class xQML(object):
         clth : ndarray of floats
             Array containing fiducial CMB spectra (unbinned).
         """
-        # Choose only needed spectra according to ispec, and truncate
-        # the ell range according the bin range. Flatten (1D) the result.
-        model = clth[self.ispecs][:,2:int(self.ellbins[-1])].ravel()
+        P, Q = self.bins._bin_operators()
+        Cl = xut.Cl4to6(clth)
+        S = SignalCovMatrix(self.Pl, np.array([P.dot(Cl[isp, :self.bins.lmax + 1]) for isp in self.ispecs]).ravel())
+        return S
 
-        # Return scalar product btw Pl and the fiducial spectra.
-        return SignalCovMatrix(self.Pl, model)
+    def __call__(self, mapA, mapB=None, return_cov=False):
+        """
+        Return the unbiased spectra
+        Parameters
+        ----------
+        mapA, mapB : 1D array
+            Pixel map number 1/2. The maps should have shape (3, npix) or (nstoeks*npix_masked), in the former case, the
+            masking will be applied to the maps.
+        return_cov: bool=True
+
+        Returns
+        ----------
+        Cl: np.ndarray
+            Returns cl or a list of cl's (in order of TT, EE, BB, TE, TB, EB)
+        [Cl_cov, ]: np.ndarray
+            2D ell-ell covariance matrix. Note that computing this is very heavy and double the memory footprint!
+        """
+        Cl = self.get_spectra(mapA, mapB)
+        if not return_cov:
+            return Cl
+        cov = self.get_covariance()
+        return Cl, cov

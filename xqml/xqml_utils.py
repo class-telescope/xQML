@@ -37,8 +37,9 @@ def getstokes(spec):
     spec : int
         Spectra names
     istokes : list
-        Indexes of power spectra
-
+        Indexes of stokes parameter in ['T', 'Q', 'U']
+    ispecs: list of int
+        Index of power spectra in ['TT', 'EE', 'BB', 'TE', 'TB', 'EB']
     Example
     ----------
     >>> getstokes(['EE','BB'])
@@ -188,6 +189,66 @@ def GetBinningMatrix(ellbins, lmax, norm=False):
     return P, Q, ell, ellval
 
 
+def tri2upper(m):
+    """
+    expand packed triangular matrix to upper matrix of shape (npix, npix).
+    The lower triangle is filled with zeros.
+    Parameters
+    ----------
+    m: np.ndarray
+        shape (..., n_tri)
+    Returns
+    -------
+    np.ndarray, shape (..., n_pix, n_pix)
+    """
+    n_tri = m.shape[-1]
+    n = int(np.sqrt(8*n_tri+1)-1)//2
+    out = np.zeros((*m.shape[:-1], n, n), dtype=m.dtype)
+    i, j = np.triu_indices(n=n, )
+    out[..., i, j] =m[..., :]
+    return out
+
+
+def upper2tri(m):
+    """
+    Packed symmetric matrix to triangular form.
+    Parameters
+    ----------
+    m: np.ndarray
+        shape (..., n_tri)
+    Returns
+    -------
+    np.ndarray, shape (..., n_pix, n_pix)
+    """
+    n = m.shape[-1]
+    n_tri = (n*(n+1))//2
+    i, j = np.triu_indices(n=n, )
+    out =np.zeros((*m.shape[:-2], n_tri), dtype=m.dtype)
+    out[..., :] = m[..., i, j]
+    return out
+
+
+def Cl4to6(Cl):
+    """
+    Zero-pad the Cl spectra in shape (4, nl) to (6, nl)
+    Parameters
+    ----------
+    Cl: np.ndarray
+        spectra in the order of TT/EE/BB/TE
+    Returns
+    -------
+    np.ndarray
+        spectra in the order of TT/EE/BB/TE/TB/EB
+    """
+    _Cl = np.array(Cl)
+    if _Cl.shape[0] == 4:
+        return np.pad(_Cl, ((0, 2), (0, 0)), constant_values=0)
+    elif _Cl.shape[0] == 6:
+        return _Cl
+    else:
+        raise ValueError(f"Wrong spectra shape: {_Cl.shape}")
+
+
 class symarray(np.ndarray):
     '''
     wrapper class for numpy array for symmetric matrices. New attribute can pack matrix to optimize storage.
@@ -218,7 +279,6 @@ class symarray(np.ndarray):
                 l = l[(m-i):]
             obj = np.asarray(A).view(cls)
             obj.packed = p
-        
         
         elif len(obj.shape) == 2:
             if obj.shape[0] != obj.shape[1]:

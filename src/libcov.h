@@ -10,12 +10,14 @@
 #define INFO(Y,args...)      { fprintf( stdout, "[%d] "Y, rank, ##args); fflush(stdout); }
 
 #define dSdC(L,I,J) dSdC[ (L)*(npixtot*npixtot) + (I)*npixtot + (J)]
+#define dSdC_tri(L,I,J) dSdC_tri[(L)*(n_tri) + (2*npixtot-(I))*((I)+1)/2-(npixtot-(J))]
 #define halfpi M_PI/2.
+
+void build_Gisher(int nl, int npix, double *C, double *El, double *G);
 
 void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El);
 
 void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll);
-
 
 void build_dSdC( int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC);
 /**
@@ -42,7 +44,6 @@ void build_dSdC( int nside, int nstokes, int npix, int inl, long *ispec, long *e
     dSdC : 2D array double
         Normalize Legendre polynomials dS/dCl
  */
-
 
 void QML_compute_dSdC( double *vr, double *vc, int lmax, long *ispec, double **dSdCpix);
 int polrotangle( double *ri, double *rj, double *cos2a, double *sin2a);

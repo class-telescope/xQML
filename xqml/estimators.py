@@ -121,6 +121,7 @@ def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
         if True, use the C-implementation to compute El
     thread: bool=False
         if True, use the python threading (if `openMP` is unset)
+    
     verbose: bool
     Returns
     ----------
@@ -149,6 +150,7 @@ def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
     npix = len(Pl[0])
     if openMP:
         El = clibcov.ComputeEl(invCAA, invCBB, Pl)
+
     elif thread:
         #Note: longer than with list...
         El = np.ndarray(np.shape(Pl))
@@ -205,9 +207,7 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
 
     if openMP:
         #pb of precision (sum of +/- big numbers)
-        Wll = np.ndarray(nl*nl)
-        clibcov.CrossWindow(El, Pl, Wll)
-        Wll = Wll.reshape(nl,nl)
+        Wll = clibcov.CrossWindow(El, Pl)
     elif thread:
         #gain a factor 2.5 on npix=600
         Wll = np.ndarray((nl, nl))

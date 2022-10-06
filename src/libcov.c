@@ -1,5 +1,37 @@
 #include "libcov.h"
 
+void build_Gisher(int nl, int npix, double *C, double *El, double *G){
+    int64_t npixtot = npix*npix;
+    double *El_CAB =(double *)malloc(sizeof(double)*nl*npixtot);
+    openblas_set_num_threads(1);
+    #pragma omp parallel
+    {
+        #pragma omp for
+        for(int l=0; l<nl; l++){
+            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+                npix, npix,
+                1, C, npix,
+                &El[l*npixtot], npix,
+                0, &El_CAB[l*npixtot], npix);
+        }
+
+        #pragma omp for
+        for(int l1=0; l1<nl; l1++){
+            for(int l2=l1; l2<nl; l2++){
+                for(int i=0; i<npix; i++){
+                for(int j=0; j<npix; j++){
+                    G[l1*nl+l2] += El_CAB[l1*npixtot+i*npix+j]*El_CAB[l2*npixtot+j*npix+i];
+                }
+                }
+                if(l2>l1){
+                    G[l2*nl+l1] = G[l1*nl+l2];
+                }
+            }
+        }
+    }
+    free(El_CAB);
+}
+
 void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El){
     int64_t npixtot = npix*npix;
     openblas_set_num_threads(1);
@@ -13,46 +45,39 @@ void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double
                         1, invCa, npix,
                         &Pl[i*npixtot], npix,
                         0, tmp, npix);
-            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+            cblas_dsymm(CblasRowMajor, CblasRight, CblasUpper,
                         npix, npix,
-                        1, tmp, npix,
-                        invCb, npix,
+                        1, invCb, npix,
+                        tmp, npix,
                         0, &El[i*npixtot], npix);
-            for(int j=0; j<npix;j++){
-                for(int k=0; k<j; k++){
-                    El[i*npixtot+j*npix+k] = El[i*npixtot+k*npix+j];
-                }
-            }
-   }
+        }
+        free(tmp);
    }
 }
 
-
 //problem of precision wrt python...
-void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll)
+void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
 {
   int64_t npixtot = npix*npix;
   
-  memset( Wll, 0., (nl*nl) * sizeof(double));
+  memset(Wll, 0., (nl*nl) * sizeof(double));
 
-#pragma omp parallel default(none) shared(nl, npixtot, El, Pl, Wll)
+  #pragma omp parallel default(none) shared(nl, npixtot, El, Pl, Wll)
   {
-#pragma omp for schedule(dynamic)
+    #pragma omp for schedule(dynamic)
     for( int l1=0; l1<nl; l1++) {
       for( int l2=0; l2<nl; l2++) {
-	
-	for( int p=0; p<npixtot; p++)
-	  Wll[l1*nl+l2] += El[l1*npixtot+p]*Pl[l2*npixtot+ p];
-	
+
+        for( int p=0; p<npixtot; p++)
+            Wll[l1*nl+l2] += El[l1*npixtot+p]*Pl[l2*npixtot+ p];
       } //loop l2
     } //loop l1
     
   } //end omp parallel
-  
 }
 
 
-void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
+void build_dSdC(int nside, int nstokes, int npix, int nbin, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
 {
   const int nspec = ispec2nspec(ispec);
   const int64_t npixtot = npix*nstokes;
@@ -60,7 +85,7 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *
   int64_t ntot = nspec*nbin*npixtot*npixtot;
   memset( dSdC, 0., ntot * sizeof(double));
 
-#pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins,ispec, npixtot)
+  #pragma omp parallel default(none) shared(stdout,nbin,nside,npix,nstokes,dSdC,ipix,bl,ellbins,ispec, npixtot)
   {
     const int lmax=ellbins[nbin]-1;
     const int lmax1 = lmax+1;
@@ -69,98 +94,92 @@ void build_dSdC( int nside, int nstokes, int npix, int nbin, long *ispec, long *
     double vr[3], vc[3];
     double **dSdCpix=NULL;
     dSdCpix = (double **) malloc( nspecall*lmax1*sizeof(double));
-    for( int il=0; il<nspecall*lmax1; il++) {
+    for(int il=0; il<nspecall*lmax1; il++) {
       dSdCpix[il] = NULL;
       dSdCpix[il] = (double *) calloc( ns*ns, sizeof(double));
-      if( dSdCpix[il] == NULL) EXIT_INFO( -1, "Problem allocation dSdCpix (l=%d)...\n", il);
+      if(dSdCpix[il] == NULL) EXIT_INFO( -1, "Problem allocation dSdCpix (l=%d)...\n", il);
     }
     
     int sI = 0, sQ = 1, sU = 2;
-    if( nstokes == 2) { sQ = 0; sU = 1; }
+    if(nstokes == 2) { sQ = 0; sU = 1; }
     
-#pragma omp for schedule(dynamic)
+    #pragma omp for schedule(dynamic)
     /* loop on local pix to build (3x3) blocks */
-    for( int cpix=0; cpix<npix; cpix++) {
+    for(int cpix=0; cpix<npix; cpix++) {
       pix2vec_ring(nside, ipix[cpix], vc);
 
-      for( int rpix=0; rpix<npix; rpix++) {
-	pix2vec_ring(nside, ipix[rpix], vr);
+      for(int rpix=0; rpix<npix; rpix++) {
+        pix2vec_ring(nside, ipix[rpix], vr);
+        QML_compute_dSdC( vr, vc, lmax, ispec, dSdCpix);
+        for(int ib=0; ib<nbin; ib++) {
+        for(int l=ellbins[ib]; l<=ellbins[ib+1]-1; l++) {
+            s=0;
 
-	QML_compute_dSdC( vr, vc, lmax, ispec, dSdCpix);
+        if( ispec[0] == 1) {
+          dSdC(s*nbin+ib,sI*npix+cpix,sI*npix+rpix) += dSdCpix[0*lmax1+l][0*ns+0] * bl[0*lmax1+l]*bl[0*lmax1+l];  //TT on II
+          s++;
+        }
 
-	for( int ib=0; ib<nbin; ib++) {
- 	  for( int l=ellbins[ib]; l<=ellbins[ib+1]-1; l++) {
-	    s=0;
+        //EE-BB
+        if( ispec[1] == 1 || ispec[2] == 1) {
+          dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QQ
+          dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QU
+          dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UQ
+          dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UU
+          s++;
 
-	    if( ispec[0] == 1) {
-	      dSdC(s*nbin+ib,sI*npix+cpix,sI*npix+rpix) += dSdCpix[0*lmax1+l][0*ns+0] * bl[0*lmax1+l]*bl[0*lmax1+l];  //TT on II
-	      s++;
-	    }
-	    
-	    //EE-BB
-	    if( ispec[1] == 1 || ispec[2] == 1) {
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QQ
-	      dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on QU
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[1*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UQ
-	      dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[1*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[1*lmax1+l];  //EE on UU
-	      s++;
-	      
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QQ
-	      dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QU
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UQ
-	      dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UU
-	      s++;
-	    }
-	    
-	    //TE
-	    if( ispec[3] == 1) {
-	      dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
-	      dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
-	      dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
-	      s++;
-	    }
+          dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QQ
+          dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+1] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on QU
+          dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[2*lmax1+l][1*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UQ
+          dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[2*lmax1+l][2*ns+2] * bl[2*lmax1+l]*bl[2*lmax1+l];  //BB on UU
+          s++;
+        }
 
-	    //TB
-	    if( ispec[4] == 1) {
-	      dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IQ
-	      dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IU
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on QI
-	      dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on UI
-	      s++;
-	    }
+        //TE
+        if( ispec[3] == 1) {
+          dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
+          dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
+          dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
+          dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
+          s++;
+        }
 
-	    //EB
-	    if( ispec[5] == 1) {
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[5*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on QQ
-	      dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[5*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on QU
-	      dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[5*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on UQ
-	      dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[5*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on UU
-	      s++;
-	    }
+        //TB
+        if( ispec[4] == 1) {
+          dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IQ
+          dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IU
+          dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on QI
+          dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on UI
+          s++;
+        }
 
- 	  } /* end loop l */
-	  
-	} /* end loop bins */
-	
+        //EB
+        if( ispec[5] == 1) {
+          dSdC(s*nbin+ib,sQ*npix+cpix,sQ*npix+rpix) += dSdCpix[5*lmax1+l][1*ns+1] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on QQ
+          dSdC(s*nbin+ib,sQ*npix+cpix,sU*npix+rpix) += dSdCpix[5*lmax1+l][1*ns+2] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on QU
+          dSdC(s*nbin+ib,sU*npix+cpix,sQ*npix+rpix) += dSdCpix[5*lmax1+l][2*ns+1] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on UQ
+          dSdC(s*nbin+ib,sU*npix+cpix,sU*npix+rpix) += dSdCpix[5*lmax1+l][2*ns+2] * bl[1*lmax1+l]*bl[2*lmax1+l];  //EB on UU
+          s++;
+        }
+
+      } /* end loop l */
+
+    } /* end loop bins */
+
       } /* end loop rpix */
     } /* end loop cpix */
 
     /* free */
-    for( int l=0; l<nspecall*lmax1; l++) free( dSdCpix[l]);
-    free( dSdCpix);
+    for(int l=0; l<nspecall*lmax1; l++) free(dSdCpix[l]);
+    free(dSdCpix);
 
   } //end omp parallel
 
 }
 
 
-
-
-
-
 /* compute 3x3 matrix correlation matrix for couple (ipix,jpix) */
-void QML_compute_dSdC( double *vr, double *vc, int lmax, long *ispec, double **dSdCpix)
+void QML_compute_dSdC(double *vr, double *vc, int lmax, long *ispec, double **dSdCpix)
 {
   double *pl=NULL, *d20=NULL, *d2p2=NULL, *d2m2=NULL;
   double cos2aij, sin2aij, cos2aji, sin2aji;
@@ -249,10 +268,6 @@ void QML_compute_dSdC( double *vr, double *vc, int lmax, long *ispec, double **d
   if( spin2 ) free( d2m2);
   if( spin02) free( d20 );
 }
-
-
-
-
 
 
 /*************************************************************************/
@@ -400,7 +415,7 @@ double fact( int n)
 
 
 /*************************************************************************/
-int ispec2nspec( long *ispec)
+int ispec2nspec(long *ispec)
 {
   int nspec=0;
 
@@ -420,7 +435,7 @@ int ispec2nspec( long *ispec)
   for( int i=0; i<6; i++)
     if( ispec[i]) nspec++;
 
-  return( nspec);
+  return(nspec);
 }
 
 int nstokes2nspec( int nstokes)

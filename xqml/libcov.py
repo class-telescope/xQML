@@ -15,8 +15,7 @@ from .xqml_utils import getstokes, progress_bar, GetBinningMatrix
 from . import _libcov as clibcov
 
 
-def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbose=False, MC=0, Sonly=False,
-                   openMP=True):
+def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbose=False, MC=0,Sonly=False,openMP=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -30,8 +29,8 @@ def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbos
         Healpy pixels numbers considered
     bl : 1D array of floats
         Beam window function
-    clth : 4D or 6D array of float
-        Fiducial power spectra
+    clth : np.ndarray
+        Fiducial power spectra 4D or 6D array of float
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
     spec : 1D array of string
@@ -80,21 +79,13 @@ def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbos
     clth = np.asarray(clth)
     if len(clth) == 4:
         clth = np.concatenate((clth,clth[0:2]*0.))
-
-    temp = "TT" in spec
-    polar = "EE" in spec or "BB" in spec
-    corr = "TE" in spec or "TB" in spec or "EB" in spec
+ 
     if Sonly:
         if MC:
-            S = S_bins_MC(
-                bins.lmins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec,
-                pixwin=pixwin, verbose=verbose)
+            S = S_bins_MC(bins.lmins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec, pixwin=pixwin, verbose=verbose)
         else:
-            S = compute_S(
-                bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, spec,
-                pixwin=pixwin, verbose=verbose)
+            S = compute_S(bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=pixwin, verbose=verbose)
         return S
-    
     if MC:
         Pl, S = covth_bins_MC(bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, MC, spec, pixwin=pixwin, verbose=verbose)
     elif openMP:
@@ -103,33 +94,38 @@ def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbos
         stokes, spec, istokes, ispecs = getstokes(spec)
         ispec = np.zeros(6,int)
         ispec[ispecs] = 1
-        nbins = (bins.nbins)*len(spec)
-        npix = len(ipok)*len(istokes)
-        Pl = np.ndarray(nbins*npix**2)
-        clibcov.dSdC(nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell, Pl)
-        Pl = Pl.reshape(nbins, npix, npix)
+        Pl = clibcov.dSdC(nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell)
         P, Q = bins._bin_operators()
-        S = SignalCovMatrix(Pl, np.array([P.dot(clth[isp,:bins.lmax+1]) for isp in ispecs]).ravel() )
+        S = SignalCovMatrix(Pl, np.array([P.dot(clth[isp,:bins.lmax+1]) for isp in ispecs]).ravel())
     else:
         Pl, S = compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec=spec, pixwin=pixwin, verbose=verbose)
-
     if verbose:
         print("Construct Pl (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-tstart))
-    
     return Pl, S
 
 
 def SignalCovMatrix(Pl, model):
     """
     Compute correlation matrix S = sum_l Pl*Cl
-    
     Parameters
     ----------
-    clth : ndarray of floats
-    Array containing fiducial CMB spectra (unbinned).
+    Pl: np.ndarray
+        shape (nl, npix, npix) or (nl, n_tri)
+    model : ndarray of floats
+        Array containing fiducial CMB spectra (unbinned).
+    Returns
+    -------
+    np.ndarray
+        shape Pl.shape[1:]
     """
     # Return scalar product btw Pl and the fiducial spectra.
-    return np.sum(Pl * model[:, None, None], 0)
+    
+    if Pl.ndim == 3:
+        return np.einsum('ijk,i->jk', Pl, model)
+    elif Pl.ndim==2:
+        return np.einsum('ij,i->j', Pl, model)
+    else:
+        raise ValueError(f"wrong shape: {Pl.shape}")
 
 
 def compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=True, verbose=False):
@@ -147,7 +143,7 @@ def compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=T
         Healpy pixels numbers considered
     bl : 1D array of floats
         Beam window function
-    clth : 4D or 6D array of float
+    clth: np.ndarray
         Fiducial power spectra
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
@@ -402,7 +398,7 @@ def compute_S(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=Tru
         Healpy pixels numbers considered
     bl : 1D array of floats
         Beam window function
-    clth : 4D or 6D array of float
+    clth : np.ndarray
         Fiducial power spectra
     Slmax : int
         Maximum lmax computed for the pixel covariance pixel matrix
@@ -717,9 +713,7 @@ def covth_bins_MC(
     return (Pl, S)
 
 
-def S_bins_MC(
-        ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu,
-        spec, pixwin=False, verbose=False):
+def S_bins_MC(ellbins, nside, ipok, allcosang, bl, clth, Slmax, nsimu, spec, pixwin=False, verbose=False):
     """
     Can be particularly slow on sl7 !
     To be enhanced and extended to TT and correlations
