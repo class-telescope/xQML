@@ -12,8 +12,7 @@ from scipy import special
 
 from .simulation import extrapolpixwin
 from .xqml_utils import getstokes, progress_bar, GetBinningMatrix
-
-import _libcov as clibcov
+from . import _libcov as clibcov
 
 
 def compute_ds_dcb( bins, nside, ipok, bl, clth, Slmax, spec,

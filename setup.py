@@ -41,7 +41,7 @@ else:
         extra += ['-fopenmp']
 
 
-libcov = Extension( name="_libcov",
+libcov = Extension( name="xqml_old._libcov",
                     sources=["src/libcov.c","src/_libcov.pyx"],
                     libraries=libs,
                     include_dirs=['src', numpy_include],
@@ -49,11 +49,12 @@ libcov = Extension( name="_libcov",
                     extra_compile_args=extra
                     )
 
-setup(name="xqml",
+setup(name="xqml_old",
       description="Code for xQML",
       author="S. Vanneste & M. Tristram",
       version="0.1",
-      packages=['xqml'],
+      packages=['xqml_old'],
+      package_dir={'xqml_old': 'xqml'},
       ext_modules=[libcov],
       install_requires=["numpy","scipy>=1.1.0","healpy>=0.6.1"],
       cmdclass={'build_ext': build_ext}
