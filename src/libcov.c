@@ -137,19 +137,19 @@ void build_dSdC(int nside, int nstokes, int npix, int nbin, long *ispec, long *e
 
         //TE
         if( ispec[3] == 1) {
-          dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IQ
-          dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on IU
-          dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on QI
-          dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TE on UI
+          dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+1] * bl[0*lmax1+l]*bl[1*lmax1+l];  //TE on IQ
+          dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[3*lmax1+l][0*ns+2] * bl[0*lmax1+l]*bl[1*lmax1+l];  //TE on IU
+          dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][1*ns+0] * bl[0*lmax1+l]*bl[1*lmax1+l];  //TE on QI
+          dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[3*lmax1+l][2*ns+0] * bl[0*lmax1+l]*bl[1*lmax1+l];  //TE on UI
           s++;
         }
 
         //TB
         if( ispec[4] == 1) {
-          dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+1] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IQ
-          dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+2] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on IU
-          dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][1*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on QI
-          dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][2*ns+0] * bl[3*lmax1+l]*bl[3*lmax1+l];  //TB on UI
+          dSdC(s*nbin+ib,sI*npix+cpix,sQ*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+1] * bl[0*lmax1+l]*bl[2*lmax1+l];  //TB on IQ
+          dSdC(s*nbin+ib,sI*npix+cpix,sU*npix+rpix) += dSdCpix[4*lmax1+l][0*ns+2] * bl[0*lmax1+l]*bl[2*lmax1+l];  //TB on IU
+          dSdC(s*nbin+ib,sQ*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][1*ns+0] * bl[0*lmax1+l]*bl[2*lmax1+l];  //TB on QI
+          dSdC(s*nbin+ib,sU*npix+cpix,sI*npix+rpix) += dSdCpix[4*lmax1+l][2*ns+0] * bl[0*lmax1+l]*bl[2*lmax1+l];  //TB on UI
           s++;
         }
 

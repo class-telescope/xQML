@@ -90,7 +90,7 @@ def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbos
         Pl, S = covth_bins_MC(bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, MC, spec, pixwin=pixwin, verbose=verbose)
     elif openMP:
         fpixwin = extrapolpixwin(nside, Slmax, pixwin)
-        bell = np.array([bl*fpixwin]*4)[:Slmax+1].ravel()
+        bell = np.array([bl*fpixwin]*3)[:, :Slmax+1].ravel()
         stokes, spec, istokes, ispecs = getstokes(spec)
         ispec = np.zeros(6,int)
         ispec[ispecs] = 1
