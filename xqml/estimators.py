@@ -4,10 +4,9 @@ Set of routines generating the estimators for xQML code
 from __future__ import division
 
 import numpy as np
-import _libcov as clibcov
 import timeit
 import threading
-
+from . import _libcov as clibcov
 
 #
 def Pl(ds_dcb):
