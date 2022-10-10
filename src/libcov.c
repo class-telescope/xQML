@@ -237,7 +237,7 @@ void QML_compute_dSdC(double *vr, double *vc, int lmax, long *ispec, double **dS
     }
     
     if( ispec[3] == 1) {
-      P02 = -d20[l];
+      P02 = -norm*d20[l];
       dSdCpix[3*(lmax+1)+l][1*ns + 0] =   P02*cos2aji ;  //TE on IQ
       dSdCpix[3*(lmax+1)+l][2*ns + 0] = - P02*sin2aji ;  //TE on IU
       dSdCpix[3*(lmax+1)+l][0*ns + 1] =   P02*cos2aij ;  //TE on QI
@@ -245,7 +245,7 @@ void QML_compute_dSdC(double *vr, double *vc, int lmax, long *ispec, double **dS
     }
 
     if( ispec[4] == 1) {
-      P02 = -d20[l];
+      P02 = -norm*d20[l];
       dSdCpix[4*(lmax+1)+l][1*ns + 0] = P02*sin2aji ;  //TB on IQ
       dSdCpix[4*(lmax+1)+l][2*ns + 0] = P02*cos2aji ;  //TB on IU
       dSdCpix[4*(lmax+1)+l][0*ns + 1] = P02*sin2aij ;  //TB on QI
