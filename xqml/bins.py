@@ -50,14 +50,15 @@ class Bins(object):
     
     def _bin_operators(self):
         ell2 = np.arange(self.lmax+1)
-        ell2 = ell2 * (ell2 + 1) / (2 * np.pi)
+        ell2 = np.ones_like(ell2)
+        # this is not needed as the dS/dP implemented in libcov.c assumes Cl not Dl, so this factor is not needed.
+        # ell2 = ell2 * (ell2 + 1) / (2 * np.pi)
         p = np.zeros((self.nbins, self.lmax+1))
         q = np.zeros((self.lmax+1, self.nbins))
         
         for b, (a, z) in enumerate(zip(self.lmins, self.lmaxs)):
             p[b, a:z] = ell2[a:z] / (z - a)
             q[a:z, b] = 1 / ell2[a:z]
-        
         return p, q
 
     def bin_spectra(self, spectra, Dl=False):
