@@ -14,6 +14,10 @@
 #define dSdC_tri(L,I,J) dSdC_tri[(L)*(n_tri) + (2*npixtot-(I))*((I)+1)/2-(npixtot-(J))]
 #define halfpi M_PI/2.
 
+void set_threads(int n);
+void yCy(int nl, int npix, double* dA, double* dB, double *El, double *Cl);
+void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l);
+
 void build_Gisher(int nl, int npix, double *C, double *El, double *G);
 
 void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El);

@@ -6,6 +6,20 @@ void set_threads(int n){
     }
 }
 
+void yCy(int nl, int npix, double* dA, double* dB, double *El, double *Cl){
+    int64_t npixtot = npix*npix;
+    openblas_set_num_threads(1);
+    #pragma omp parallel
+    {
+        double *tmp = (double *)malloc(sizeof(double)*npix);
+        #pragma omp for
+        for(int i=0; i<nl; i++){
+            cblas_dgemv(CblasRowMajor,  CblasNoTrans,  npix, npix, 1, &El[i*npixtot], npix,  dB, 1,  0.0,  tmp, 1);
+            Cl[i] = cblas_ddot(npix, dA, 1, tmp, 1);
+        }
+    }
+}
+
 void build_Gisher(int nl, int npix, double *C, double *El, double *G){
     int64_t npixtot = npix*npix;
     double *El_CAB =(double *)malloc(sizeof(double)*nl*npixtot);
@@ -38,6 +52,26 @@ void build_Gisher(int nl, int npix, double *C, double *El, double *G){
     free(El_CAB);
 }
 
+
+void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l){
+    int64_t npixtot = npix*npix;
+    openblas_set_num_threads(omp_get_max_threads());
+
+    double *tmp = (double *)malloc(sizeof(double)*npixtot);
+    cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+                npix, npix,
+                1, invCa, npix,
+                P_l, npix,
+                0, tmp, npix);
+    cblas_dsymm(CblasRowMajor, CblasRight, CblasUpper,
+                npix, npix,
+                1, invCb, npix,
+                tmp, npix,
+                0, E_l, npix);
+    free(tmp);
+}
+
+
 void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El){
     int64_t npixtot = npix*npix;
     openblas_set_num_threads(1);
@@ -65,12 +99,10 @@ void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double
 void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
 {
   int64_t npixtot = npix*npix;
-  
   memset(Wll, 0., (nl*nl) * sizeof(double));
-
   #pragma omp parallel default(none) shared(nl, npixtot, El, Pl, Wll)
   {
-    #pragma omp for schedule(dynamic)
+    #pragma omp for
     for( int l1=0; l1<nl; l1++) {
       for( int l2=0; l2<nl; l2++) {
 

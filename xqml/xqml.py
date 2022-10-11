@@ -179,9 +179,9 @@ class xQML(object):
         if self.cross:
             cond_sizeB = np.size(mapB)==self.nstokes * self.npix
             dB = mapB if cond_sizeB else mapB[self.istokes][:, self.mask]
-            yl = yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
+            yl = clibcov.yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
         else:
-            yl = yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
+            yl = clibcov.yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
 
         cl = ClQuadEstimator(self.invW, yl)
 

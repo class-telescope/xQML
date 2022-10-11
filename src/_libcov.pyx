@@ -2,7 +2,6 @@
 import cython
 import numpy as np
 cimport numpy as np
-
 from cpython cimport array
 
 "# distutils: language = c"
@@ -12,9 +11,10 @@ np.import_array()
 
 
 cdef extern from "libcov.h":
-    void set_threads(int n);
+    void set_threads(int n)
+    void yCy(int nl, int npix, double * dA, double * dB, double *El, double *Cl)
     
-    void build_El_list(int nl, int npix, double *Pl, double *invCa, double *invCb, list El)
+    void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l)
     void build_Gisher(int nl, int npix, double *C, double *El, double *G)
     void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El)
     void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
@@ -26,6 +26,18 @@ cdef extern from "libcov.h":
 
 def py_set_threads(n):
     set_threads(n)
+
+def yQuadEstimator(np.ndarray[double, ndim=1, mode="c"] dA,
+                   np.ndarray[double, ndim=1, mode="c"] dB,
+                   np.ndarray[double, ndim=3, mode="c"] El,):
+    nl, npix = El.shape[:2]
+    yl = np.zeros(nl, dtype=np.float64)
+    yCy(nl, npix,
+        <double*> np.PyArray_DATA(dA),
+        <double*> np.PyArray_DATA(dB),
+        <double*> np.PyArray_DATA(El),
+        <double*> np.PyArray_DATA(yl))
+    return yl
 
 def dSdC(nside, nstokes,
          np.ndarray[long, ndim=1, mode="c"] ispec not None,
@@ -56,18 +68,6 @@ def ComputeEl(np.ndarray[double, ndim=2, mode="c"] invCa not None,
              <double*> np.PyArray_DATA(invCa),
              <double*> np.PyArray_DATA(invCb),
              <double*> np.PyArray_DATA(El))
-    return El
-
-def ComputeEl_list(np.ndarray[double, ndim=2, mode="c"] invCa not None,
-                   np.ndarray[double, ndim=2, mode="c"] invCb not None,
-                   np.ndarray[double, ndim=3, mode="c"] Pl not None):
-    nl, npix = Pl.shape[:2]
-    El = [None] * nl
-    build_El_list(nl, npix,
-                  <double*> np.PyArray_DATA(Pl),
-                  <double*> np.PyArray_DATA(invCa),
-                  <double*> np.PyArray_DATA(invCb),
-                  El)
     return El
 
 def CrossGisher(np.ndarray[double, ndim=2, mode="c"] C not None,

@@ -43,7 +43,7 @@ class Bins(object):
         return self.lmins, self.lmaxs
     
     def cut_binning(self, lmin, lmax):
-        sel = np.where( (self.lmins >= lmin) & (self.lmaxs <= lmax+1) )[0]
+        sel = np.where((self.lmins >= lmin) & (self.lmaxs <= lmax+1) )[0]
         self.lmins = self.lmins[sel]
         self.lmaxs = self.lmaxs[sel]
         self._derive_ext()
