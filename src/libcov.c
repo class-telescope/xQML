@@ -1,5 +1,11 @@
 #include "libcov.h"
 
+void set_threads(int n){
+    if (n>0){
+        omp_set_num_threads(n);
+    }
+}
+
 void build_Gisher(int nl, int npix, double *C, double *El, double *G){
     int64_t npixtot = npix*npix;
     double *El_CAB =(double *)malloc(sizeof(double)*nl*npixtot);

@@ -12,6 +12,9 @@ np.import_array()
 
 
 cdef extern from "libcov.h":
+    void set_threads(int n);
+    
+    void build_El_list(int nl, int npix, double *Pl, double *invCa, double *invCb, list El)
     void build_Gisher(int nl, int npix, double *C, double *El, double *G)
     void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El)
     void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
@@ -20,6 +23,9 @@ cdef extern from "libcov.h":
     void dlss( double X, int s1, int s2, int lmax, double *d)
     int polrotangle( double *ri, double *rj, double *cos2a, double *sin2a)
 
+
+def py_set_threads(n):
+    set_threads(n)
 
 def dSdC(nside, nstokes,
          np.ndarray[long, ndim=1, mode="c"] ispec not None,
@@ -52,6 +58,18 @@ def ComputeEl(np.ndarray[double, ndim=2, mode="c"] invCa not None,
              <double*> np.PyArray_DATA(El))
     return El
 
+def ComputeEl_list(np.ndarray[double, ndim=2, mode="c"] invCa not None,
+                   np.ndarray[double, ndim=2, mode="c"] invCb not None,
+                   np.ndarray[double, ndim=3, mode="c"] Pl not None):
+    nl, npix = Pl.shape[:2]
+    El = [None] * nl
+    build_El_list(nl, npix,
+                  <double*> np.PyArray_DATA(Pl),
+                  <double*> np.PyArray_DATA(invCa),
+                  <double*> np.PyArray_DATA(invCb),
+                  El)
+    return El
+
 def CrossGisher(np.ndarray[double, ndim=2, mode="c"] C not None,
                 np.ndarray[double, ndim=3, mode="c"] El not None):
     """
@@ -64,7 +82,6 @@ def CrossGisher(np.ndarray[double, ndim=2, mode="c"] C not None,
               <double *>np.PyArray_DATA(El),
               <double *>np.PyArray_DATA(Gl))
     return Gl
-    
 
 def CrossWindow(np.ndarray[double, ndim=3, mode="c"] El not None,
                 np.ndarray[double, ndim=3, mode="c"] Pl not None):

@@ -20,21 +20,21 @@ from .bins import Bins
 from . import xqml_utils as xut
 from .estimators import El
 from .estimators import CovAB
-from .estimators import CrossGisherMatrix
-from .estimators import CrossWindowFunction, CrossWindowFunctionLong
+from .estimators import CrossWindowFunction
 from .estimators import yQuadEstimator, ClQuadEstimator
 from .estimators import biasQuadEstimator
 
 from .libcov import compute_ds_dcb, SignalCovMatrix
 from . import _libcov as clibcov
+from ._libcov import py_set_threads as set_threads
 
-__all__ = ['xQML', 'Bins']
+__all__ = ['xQML', 'Bins', 'set_threads']
 
 
 class xQML(object):
     """ Main class to handle the spectrum estimation """
     def __init__(self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
-                  S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True):
+                  S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True, nthreads=-1):
         """
         Parameters
         ----------
@@ -55,7 +55,8 @@ class xQML(object):
         pixwin : boolean, optional
             If True, applies pixel window function to spectra. Default: True
         """
-        
+        if nthreads>0:
+            set_threads(nthreads)
         self.bias = None
         self.cross = NB is not None
         self.NA = NA
