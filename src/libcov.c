@@ -8,7 +8,7 @@ void set_threads(int n){
 
 void yCy(int nl, int npix, double* dA, double* dB, double *El, double *Cl){
     int64_t npixtot = npix*npix;
-    openblas_set_num_threads(1);
+//    openblas_set_num_threads(1);
     #pragma omp parallel
     {
         double *tmp = (double *)malloc(sizeof(double)*npix);
@@ -23,7 +23,7 @@ void yCy(int nl, int npix, double* dA, double* dB, double *El, double *Cl){
 void build_Gisher(int nl, int npix, double *C, double *El, double *G){
     int64_t npixtot = npix*npix;
     double *El_CAB =(double *)malloc(sizeof(double)*nl*npixtot);
-    openblas_set_num_threads(1);
+//    openblas_set_num_threads(1);
     #pragma omp parallel
     {
         #pragma omp for
@@ -55,8 +55,7 @@ void build_Gisher(int nl, int npix, double *C, double *El, double *G){
 
 void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l){
     int64_t npixtot = npix*npix;
-    openblas_set_num_threads(omp_get_max_threads());
-
+//    openblas_set_num_threads(omp_get_max_threads());
     double *tmp = (double *)malloc(sizeof(double)*npixtot);
     cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
                 npix, npix,
@@ -74,7 +73,7 @@ void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double
 
 void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El){
     int64_t npixtot = npix*npix;
-    openblas_set_num_threads(1);
+//    openblas_set_num_threads(1);
     #pragma omp parallel
     {
         double *tmp = (double *)malloc(sizeof(double)*npixtot);
