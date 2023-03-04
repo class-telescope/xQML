@@ -19,3 +19,5 @@ MANIFEST
 
 .idea/
 src/_libcov.c
+local/
+__pycache__/
