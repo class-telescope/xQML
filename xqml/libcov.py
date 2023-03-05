@@ -3,7 +3,7 @@ Set of routines to ...
 """
 from __future__ import division
 
-import timeit
+from time import perf_counter
 
 import numpy as np
 import healpy as hp
@@ -15,7 +15,7 @@ from .xqml_utils import getstokes, progress_bar, GetBinningMatrix
 from . import _libcov as clibcov
 
 
-def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbose=False, MC=0,Sonly=False,openMP=True):
+def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True):
     """
     Compute the Pl = dS/dCl matrices.
 
@@ -38,15 +38,6 @@ def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbos
     pixwin : bool
         If True, multiplies the beam window function by the pixel
         window function. Default: True
-    verbose : bool
-        If True, displays timmer. Default: False
-    MC : int
-        If not 0, computes Pl using Monte-Carlo method from MC simulations.
-        Default: False
-    Sonly : bool
-        If True, compute the signal matric only. Default: False
-
-
     Returns
     ----------
     Pl : ndarray of floats
@@ -68,40 +59,17 @@ def compute_ds_dcb(bins, nside, ipok, bl, clth, Slmax, spec, pixwin=True, verbos
     if Slmax < bins.lmax:
         print("WARNING : Slmax < lmax")
 
-    # ### define pixels
-    rpix = np.array(hp.pix2vec(nside, ipok))
-    allcosang = np.dot(np.transpose(rpix), rpix)
-    allcosang[allcosang > 1] = 1.0
-    allcosang[allcosang < -1] = -1.0
-
-    tstart = timeit.default_timer()
-
     clth = np.asarray(clth)
     if len(clth) == 4:
         clth = np.concatenate((clth,clth[0:2]*0.))
  
-    if Sonly:
-        if MC:
-            S = S_bins_MC(bins.lmins, nside, ipok, allcosang, bl, clth, Slmax, MC, spec, pixwin=pixwin, verbose=verbose)
-        else:
-            S = compute_S(bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=pixwin, verbose=verbose)
-        return S
-    if MC:
-        Pl, S = covth_bins_MC(bins.lmin, nside, ipok, allcosang, bl, clth, Slmax, MC, spec, pixwin=pixwin, verbose=verbose)
-    elif openMP:
-        fpixwin = extrapolpixwin(nside, Slmax, pixwin)
-        bell = np.array([bl*fpixwin]*3)[:, :Slmax+1].ravel()
-        stokes, spec, istokes, ispecs = getstokes(spec)
-        ispec = np.zeros(6,int)
-        ispec[ispecs] = 1
-        Pl = clibcov.dSdC(nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell)
-        P, Q = bins._bin_operators()
-        S = SignalCovMatrix(Pl, np.array([P.dot(clth[isp,:bins.lmax+1]) for isp in ispecs]).ravel())
-    else:
-        Pl, S = compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec=spec, pixwin=pixwin, verbose=verbose)
-    if verbose:
-        print("Construct Pl (npix=%d): %.1f sec" % (len(ipok),timeit.default_timer()-tstart))
-    return Pl, S
+    fpixwin = extrapolpixwin(nside, Slmax, pixwin)
+    bell = np.array([bl*fpixwin]*3)[:, :Slmax+1].ravel()
+    stokes, spec, istokes, ispecs = getstokes(spec)
+    ispec = np.zeros(6,int)
+    ispec[ispecs] = 1
+    Pl = clibcov.dSdC(nside, len(istokes), ispec, np.insert(bins.lmins,bins.nbins,bins.lmax+1), ipok, bell)
+    return Pl
 
 
 def SignalCovMatrix(Pl, model):
@@ -218,7 +186,7 @@ def compute_PlS(ellbins, nside, ipok, allcosang, bl, clth, Slmax, spec, pixwin=T
     Pl = np.zeros((nspec*nbins, nsto*npi, nsto*npi))
     S = np.zeros((nsto*npi, nsto*npi))
 
-    tstart = timeit.default_timer()
+    tstart = perf_counter()
 
     for i in np.arange(npi):
         if verbose:
