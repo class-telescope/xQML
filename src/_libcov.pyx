@@ -17,6 +17,7 @@ cdef extern from "libcov.h":
     void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l)
     void build_Gisher(int nl, int npix, double *C, double *El, double *G)
     void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El)
+    void filter_Pl(int nl, int npix, int npix_full, double *Pl, double * Pl_out, double * MF,);
     void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
     void build_dSdC(int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
     int ispec2nspec(long *ispec)
@@ -69,6 +70,18 @@ def ComputeEl(np.ndarray[double, ndim=2, mode="c"] invCa not None,
              <double*> np.PyArray_DATA(invCb),
              <double*> np.PyArray_DATA(El))
     return El
+
+def FilterPl(np.ndarray[double, ndim=3, mode="c"] Pl not None,
+             np.ndarray[double, ndim=2, mode="c"] MF not None,
+             ):
+    nl, npix_full = Pl.shape[:2]
+    npix = MF.shape[0]
+    Pl_out = np.zeros((nl, npix, npix), dtype=np.float64)
+    filter_Pl(nl, npix, npix_full,
+              <double*> np.PyArray_DATA(Pl),
+              <double*> np.PyArray_DATA(Pl_out),
+              <double*> np.PyArray_DATA(MF))
+    return Pl_out
 
 def CrossGisher(np.ndarray[double, ndim=2, mode="c"] C not None,
                 np.ndarray[double, ndim=3, mode="c"] El not None):

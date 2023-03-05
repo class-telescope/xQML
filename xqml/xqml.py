@@ -31,8 +31,11 @@ __all__ = ['xQML', 'Bins', 'set_threads']
 
 class xQML(object):
     """ Main class to handle the spectrum estimation """
-    def __init__(self, mask, bins, clth, NA=None, NB=None, lmax=None, Pl=None,
-                  S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True, nthreads=-1):
+    def __init__(self, mask, bins, clth, NA=None, NB=None, F=None, Fmask=None,
+                 lmax=None, Pl=None,
+                 S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True,
+                 
+                 nthreads=-1):
         """
         Parameters
         ----------
@@ -42,6 +45,11 @@ class xQML(object):
             Contains information about bins
         clth : ndarray of floats
             Array containing fiducial CMB spectra (unbinned)
+        NA,NB: npt.NDArray=None
+        F: npt.NDArray = None
+            Matrix representation of the filter
+        Fmask: npt.NDArray = None
+            Binary mask definine the filter's domain. shape (12*nside^2, )
         lmax : int
             Maximum multipole
         Pl : ndarray or None, optional
@@ -62,15 +70,19 @@ class xQML(object):
         # Number of pixels in the mask
         # For example that would be good to have an assertion
         # on the mask size, just to check that it corresponds to a valid nside.
-        npixtot = len(mask)
-        
+
         # Map resolution (healpix)
-        self.nside = hp.npix2nside(npixtot)
+        self.nside = hp.get_nside(mask)
+        npixtot = hp.nside2npix(self.nside)
         # ipok are pixel indexes outside the mask
-        self.mask = np.asarray(mask,bool)
-        self.ipok = np.arange(npixtot)[self.mask]
-        self.npix = len(self.ipok)
-        
+        if Fmask is not None:
+            # use the extended mask for Pl contruction
+            _mask = np.asarray(Fmask, bool)
+        else:
+            _mask = np.asarray(mask, bool)
+        ipok = np.arange(npixtot)[_mask]
+        npix = len(ipok)
+    
         # binning (Bins class)
         self.bins = bins
         
@@ -92,18 +104,19 @@ class xQML(object):
         if len(clth) == 4:
             clth = np.concatenate((clth,clth[0:2]*0.))
 
-        nbin = bins.nbins
-        nmem = self.nspec*nbin*(self.nstokes*self.npix)**2
-        toGb = 1024. * 1024. * 1024.
         if verbose:
+            nbin = bins.nbins
+            nmem = self.nspec * nbin * (self.nstokes * npix)**2
+            toGb = 1024. * 1024. * 1024.
             print("xQML")
-            print("spec: ", spec)
-            print("nbin: ", nbin)
-            print("Memset: %.2f Gb (%d,%d,%d,%d)" % (8.*nmem/toGb,self.nspec,nbin,self.nstokes,self.npix))
+            print(f"spec: {spec}")
+            print(f"nbin: {nbin}")
+            print(f"Memset: {8.*nmem/toGb:.2f} Gb {self.nspec} {nbin} {self.nstokes} {npix}")
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
-        # Otherwise compute Pl and S from the arguments.
+        # Otherwise, compute Pl and S from the arguments.
         # Ok, but Pl cannot be binned, otherwise S construction is not valid
+        tic = perf_counter()
         if Pl is None:
             self.Pl = compute_ds_dcb(self.bins, self.nside, ipok, self.bl, clth, self.Slmax,
                                      self.spec, pixwin=self.pixwin)
@@ -113,10 +126,31 @@ class xQML(object):
 
         else:
             self.Pl = Pl
-            if S is None:
-                self.S = self._SignalCovMatrix(clth)
-            else:
-                self.S = S
+
+        # restore the total mask
+        self.mask = np.asarray(mask, bool)
+        self.ipok = np.arange(npixtot)[mask]
+        self.npix = len(self.ipok)
+        
+        if Fmask is not None:
+            ipix = np.arange(hp.nside2npix(self.nside))
+            pix_map = np.isin(ipix[Fmask], ipix[mask])
+            nF = np.count_nonzero(Fmask)
+            assert self.nstokes*nF == F.shape[0]
+            self.MF = np.zeros((self.nstokes * self.npix, F.shape[1]))
+            for i in range(self.nstokes):
+                self.MF[i * self.npix: (i + 1) * self.npix] = F[i * nF:(i + 1) * nF, :][pix_map]
+            self.Pl = clibcov.FilterPl(self.Pl, self.MF)
+            if verbose:
+                print(f"Filter Pl: {perf_counter() - tic:.1f} sec")
+            tic = perf_counter()
+            
+        P, Q = bins._bin_operators()
+        self.S = SignalCovMatrix(self.Pl,
+                                 np.array([P.dot(clth[isp, :bins.lmax + 1]) for isp in self.ispecs]).ravel())
+        if verbose:
+            print(f"Construct S (npix={len(ipok)}): {perf_counter() - tic:.1f} sec")
+        tic = perf_counter()
         
         if NA is not None:
             self.construct_esti(NA=NA, NB=NB, verbose=verbose, thread=True)
