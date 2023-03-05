@@ -94,6 +94,44 @@ void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double
    }
 }
 
+void filter_Pl(int nl, int npix, int npix_full, double *Pl, double *Pl_out, double *MF){
+    int64_t npixtot = npix*npix;
+    int64_t npixtot_full = npix_full*npix_full;
+//    MF shape (npix, npix_full)
+    #pragma omp parallel
+    {
+        double *tmp = (double *)malloc(sizeof(double)*npix*npix_full);
+        #pragma omp for
+        for(int i=0; i<nl; i++){
+              cblas_dsymm(CblasRowMajor, CblasRight, CblasUpper,
+                  npix, npix_full, 1.0, &Pl[i*npixtot_full], npix_full,
+                  MF, npix_full,
+                  0, tmp, npix_full);
+              cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                  npix, npix, npix_full, 1.0, tmp, npix_full,
+                  MF, npix_full,
+                  0, &Pl_out[i*npixtot], npix);
+//            M Pl M^T
+//            = M L L^T M^T
+//            = (ML)(ML)^T
+//            LAPACKE_dlacpy(LAPACK_ROW_MAJOR, 'O', npix, npix_full, MF, npix_full, tmp, npix_full);
+//            LAPACKE_dpotrf(LAPACK_ROW_MAJOR, 'U', npix_full, &Pl[i*npixtot_full], npix_full);
+//            cblas_dtrmm(CblasRowMajor, CblasRight, CblasUpper, CblasTrans, CblasNonUnit,
+//                  npix, npix_full, 1.0, &Pl[i*npixtot_full], npix_full,
+//                  tmp, npix_full);
+//            cblas_dsyrk(CblasRowMajor, CblasUpper, CblasNoTrans,
+//                  npix, npix_full,
+//                  1.0, tmp, npix_full,
+//                  0.0, &Pl_out[i*npixtot], npix);
+//            Pl need to be symmetrized
+
+        }
+        free(tmp);
+
+   }
+}
+
+
 //problem of precision wrt python...
 void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
 {

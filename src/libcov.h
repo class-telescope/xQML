@@ -4,6 +4,7 @@
 #include <math.h>
 #include <omp.h>
 #include <cblas.h>
+#include <lapacke.h>
 
 #define OK 0
 #define NOK 1
@@ -21,6 +22,8 @@ void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double
 void build_Gisher(int nl, int npix, double *C, double *El, double *G);
 
 void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El);
+
+void filter_Pl(int nl, int npix, int npix_full, double *Pl, double *Pl_out, double *MF);
 
 void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll);
 
