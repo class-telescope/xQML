@@ -223,7 +223,6 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
             proc.start()
         for proc in procs:
             proc.join()
-        
     else:
         # No transpose because P symm
         Wll = np.asarray([np.sum(E * P) for E in El for P in Pl]).reshape(nl,nl)

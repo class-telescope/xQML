@@ -95,7 +95,6 @@ def getNl(pixvar, nside, nbins):
     return Nl
 
 
-
 def extrapolpixwin(nside, Slmax, pixwin=True):
     '''
     Parameters

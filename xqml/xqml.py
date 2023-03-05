@@ -4,10 +4,8 @@
 """
 from __future__ import division
 
-import sys
-import timeit
-import string
 
+from time import perf_counter
 from scipy import linalg
 
 import numpy as np
@@ -38,7 +36,7 @@ class xQML(object):
         """
         Parameters
         ----------
-        mask : 1D array of booleans
+        mask : npt.NDArray
             Mask defining the region of interest (of value True)
         bins : Bins class object
             Contains information about bins
@@ -107,8 +105,11 @@ class xQML(object):
         # Otherwise compute Pl and S from the arguments.
         # Ok, but Pl cannot be binned, otherwise S construction is not valid
         if Pl is None:
-            self.Pl, self.S = compute_ds_dcb(self.bins, self.nside, self.ipok, self.bl, clth, self.Slmax,
-                                             self.spec, pixwin=self.pixwin, verbose=verbose, openMP=True)
+            self.Pl = compute_ds_dcb(self.bins, self.nside, ipok, self.bl, clth, self.Slmax,
+                                     self.spec, pixwin=self.pixwin)
+            if verbose:
+                print(f"Construct Pl (npix={len(ipok)}): {perf_counter() - tic:.1f} sec")
+            tic = perf_counter()
 
         else:
             self.Pl = Pl
@@ -119,6 +120,8 @@ class xQML(object):
         
         if NA is not None:
             self.construct_esti(NA=NA, NB=NB, verbose=verbose, thread=True)
+        if verbose:
+            print(f"Construct estimator: {perf_counter()-tic:.1f} sec")
 
     def construct_esti(self, NA, NB, verbose=False, thread=True):
         """
@@ -132,11 +135,10 @@ class xQML(object):
             Noise covariance matrix of dataset A
         NB : 2D array
             Noise covariance matrix of dataset B
+        verbose: bool=False
         thread: bool=True
             do OMP or threading
         """
-
-        tstart = timeit.default_timer()
         
         # Invert (signalA + noise) matrix
         invCa = xut.pd_inv(self.S + NA)
@@ -148,15 +150,14 @@ class xQML(object):
         self.El = El(invCa, invCb, self.Pl, openMP=True, thread=thread, verbose=verbose)
         
         # Finally compute invW by inverting (longer)
-        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, openMP=True, thread=thread, verbose=verbose))
+        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, openMP=True, thread=thread,
+                                                   verbose=verbose))
         
         # Compute bias for auto
         if not self.cross:
             self.bias = biasQuadEstimator(NA, self.El)
         # self.bias = biasQuadEstimator(self.NA, self.El)
-        
-        if verbose:
-            print("Construct estimator: %.1f sec" % (timeit.default_timer()-tstart))
+    
         
     def get_spectra(self, mapA, mapB=None):
         """
