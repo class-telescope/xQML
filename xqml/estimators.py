@@ -104,7 +104,7 @@ def CorrelationMatrix(Clth, Pl, ellbins, polar=True, temp=False, corr=False):
     return S
 
 
-def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
+def El(invCAA, invCBB, Pl, verbose=False):
     """
     Compute El = CAA^-1.Pl.CBB^-1
     (Note: El is not symmetric for cross)
@@ -117,17 +117,12 @@ def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
         Inverse pixel covariance matrix of dataset B
     Pl : ndarray of floats
         Rescaled normalize Legendre polynomials dS/dCl
-    openMP: bool=True
-        if True, use the C-implementation to compute El
-    thread: bool=False
-        if True, use the python threading (if `openMP` is unset)
     
     verbose: bool
     Returns
     ----------
-    El : array of float (shape(Pl))
-        Quadratic parameter matrices such that yl = dA.El.dB.T
-
+    El : array of float, shape(nl, npixB, npixA)
+        Quadratic parameter matrices such that yl = dBT.El.dA
     Example
     ----------
     >>> Pl = np.arange(12).reshape(3,2,2)
@@ -147,26 +142,8 @@ def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
 
     tstart = perf_counter()
     nl = len(Pl)
-    npix = len(Pl[0])
-    if openMP:
-        El = clibcov.ComputeEl(invCAA, invCBB, Pl)
-
-    elif thread:
-        #Note: longer than with list...
-        El = np.ndarray(np.shape(Pl))
-        def CPC(l):
-            El[l] = np.dot(np.dot(invCAA, Pl[l]), invCBB)
-        procs = []
-        for l in range(nl):
-            proc = threading.Thread(target=CPC,args=(l,))
-            procs.append(proc)
-
-        for proc in procs:
-            proc.start()
-        for proc in procs:
-            proc.join()
-    else:
-        El = np.array([np.linalg.multi_dot([invCAA, P, invCBB]) for P in Pl])
+    
+    El = clibcov.ComputeEl(invCAA, invCBB, Pl)
 
     if verbose:
         print("Construct El (nl=%d): %.1f sec" % (nl, perf_counter()-tstart))
@@ -174,7 +151,7 @@ def El(invCAA, invCBB, Pl, openMP=True, thread=False, verbose=False):
     return El
 
 
-def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
+def CrossWindowFunction(El, Pl, verbose=False):
     """
     Compute mode-mixing matrix (Tegmark's window matrix)
     Wll = Trace[invCAA.Pl.invCBB.Pl] = Trace[El.Pl]
@@ -202,31 +179,8 @@ def CrossWindowFunction(El, Pl, openMP=False, thread=False, verbose=False):
      [134 478 822]]
     """
     nl = len(El)
-
     tstart = perf_counter()
-
-    if openMP:
-        #pb of precision (sum of +/- big numbers)
-        Wll = clibcov.CrossWindow(El, Pl)
-    elif thread:
-        #gain a factor 2.5 on npix=600
-        Wll = np.ndarray((nl, nl))
-        def EP( l1, l2):
-            Wll[l1,l2] = np.sum(El[l1]*Pl[l2])
-        procs = []
-        for l1 in range(nl):
-            for l2 in range(nl):                
-                proc = threading.Thread(target=EP, args=(l1,l2,))
-                procs.append(proc)
-
-        for proc in procs:
-            proc.start()
-        for proc in procs:
-            proc.join()
-    else:
-        # No transpose because P symm
-        Wll = np.asarray([np.sum(E * P) for E in El for P in Pl]).reshape(nl,nl)
-
+    Wll = clibcov.CrossWindow(El, Pl)
     if verbose:
         print("Construct Wll (nl=%d): %.1f sec" % (nl,perf_counter()-tstart))
     return Wll
@@ -396,7 +350,6 @@ def biasQuadEstimator(NoiseN, El):
     ----------
     ???
     """
-
     return [np.sum(NoiseN * E) for E in El]
 
 
