@@ -66,8 +66,8 @@ class xQML(object):
             set_threads(nthreads)
         self.bias = None
         self.cross = NB is not None
-        self.NA = NA
-        self.NB = NB if self.cross else NA
+        self.NA = NA.astype(np.float64)
+        self.NB = NB.astype(np.float64) if self.cross else self.NA
         # Number of pixels in the mask
         # For example that would be good to have an assertion
         # on the mask size, just to check that it corresponds to a valid nside.
@@ -291,10 +291,11 @@ class xQML(object):
             assert mapB is not mapA, "can't use the same map for cross spectra."
         cond_sizeA = np.size(mapA)==self.nstokes * self.npixA
         dA = mapA if cond_sizeA else mapA[self.istokes][:, self.maskA]
-
+        dA = np.asarray(dA, dtype=np.float64)
         if self.cross:
             cond_sizeB = np.size(mapB)==self.nstokes * self.npixB
             dB = mapB if cond_sizeB else mapB[self.istokes][:, self.maskB]
+            dB = np.asarray(dB, dtype=np.float64)
             yl = clibcov.yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
         else:
             yl = clibcov.yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
