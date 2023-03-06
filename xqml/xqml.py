@@ -14,7 +14,6 @@ import random as rd
 
 from .bins import Bins
 
-
 from . import xqml_utils as xut
 from .estimators import El
 from .estimators import CovAB
@@ -31,24 +30,26 @@ __all__ = ['xQML', 'Bins', 'set_threads']
 
 class xQML(object):
     """ Main class to handle the spectrum estimation """
-    def __init__(self, mask, bins, clth, NA=None, NB=None, F=None, Fmask=None,
+    def __init__(self, maskA, maskB, bins, clth,
+                 NA=None, NB=None,
+                 FA=None, FAmask=None,
+                 FB=None, FBmask=None,
                  lmax=None, Pl=None,
-                 S=None, fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True,
-                 
+                 fwhm=0., bell=None, spec=['EE','BB'], pixwin=True, verbose=True,
                  nthreads=-1):
         """
         Parameters
         ----------
-        mask : npt.NDArray
+        maskA,maskB : npt.NDArray
             Mask defining the region of interest (of value True)
         bins : Bins class object
             Contains information about bins
         clth : ndarray of floats
             Array containing fiducial CMB spectra (unbinned)
         NA,NB: npt.NDArray=None
-        F: npt.NDArray = None
+        FA,FB: npt.NDArray = None
             Matrix representation of the filter
-        Fmask: npt.NDArray = None
+        FAmask,FBmask: npt.NDArray = None
             Binary mask definine the filter's domain. shape (12*nside^2, )
         lmax : int
             Maximum multipole
@@ -58,7 +59,7 @@ class xQML(object):
             FWHM of the experiment beam in degree
         bell : ndarray, optional
             beam transfer function (priority over fwhm)
-        pixwin : boolean, optional
+        pixwin : bool, optional
             If True, applies pixel window function to spectra. Default: True
         """
         if nthreads>0:
@@ -70,19 +71,27 @@ class xQML(object):
         # Number of pixels in the mask
         # For example that would be good to have an assertion
         # on the mask size, just to check that it corresponds to a valid nside.
-
+        assert maskA.shape==maskB.shape, "xQML only supports maps at the same resolution"
         # Map resolution (healpix)
-        self.nside = hp.get_nside(mask)
+        self.nside = hp.get_nside(maskA)
         npixtot = hp.nside2npix(self.nside)
         # ipok are pixel indexes outside the mask
-        if Fmask is not None:
-            # use the extended mask for Pl contruction
-            _mask = np.asarray(Fmask, bool)
+        if FAmask is not None or FBmask is not None:
+            _maskA = np.asarray(FAmask if FAmask is not None else maskA, bool)
+            _maskB = np.asarray(FBmask if FBmask is not None else maskB, bool)
+            if FAmask is not None:
+                assert np.all(FAmask[maskA]), "Filter A does not fully cover the mask region A"
+            if FBmask is not None:
+                assert np.all(FBmask[maskB]), "Filter A does not fully cover the mask region A"
         else:
-            _mask = np.asarray(mask, bool)
-        ipok = np.arange(npixtot)[_mask]
-        npix = len(ipok)
-    
+            _maskA = np.asarray(maskA, bool)
+            _maskB = np.asarray(maskB, bool)
+        
+        # build initial Pl for the extended region
+        mask_ext = np.logical_or(_maskA, _maskB)
+        ipok_ext = np.arange(npixtot)[mask_ext]
+        npix_ext = np.count_nonzero(mask_ext)
+        
         # binning (Bins class)
         self.bins = bins
         
@@ -106,57 +115,130 @@ class xQML(object):
 
         if verbose:
             nbin = bins.nbins
-            nmem = self.nspec * nbin * (self.nstokes * npix)**2
+            nmem = self.nspec * nbin * (self.nstokes * npix_ext)**2
             toGb = 1024. * 1024. * 1024.
             print("xQML")
             print(f"spec: {spec}")
             print(f"nbin: {nbin}")
-            print(f"Memset: {8.*nmem/toGb:.2f} Gb {self.nspec} {nbin} {self.nstokes} {npix}")
+            print(f"Memset: {8.*nmem/toGb:.2f} Gb {self.nspec} spec {nbin} bin {self.nstokes} {npix_ext} pix")
         # If Pl is given by the user, just load it, and then compute the signal
         # covariance using the fiducial model.
         # Otherwise, compute Pl and S from the arguments.
         # Ok, but Pl cannot be binned, otherwise S construction is not valid
         tic = perf_counter()
         if Pl is None:
-            self.Pl = compute_ds_dcb(self.bins, self.nside, ipok, self.bl, clth, self.Slmax,
+            Pl = compute_ds_dcb(self.bins, self.nside, ipok_ext, self.bl, clth, self.Slmax,
                                      self.spec, pixwin=self.pixwin)
             if verbose:
-                print(f"Construct Pl (npix={len(ipok)}): {perf_counter() - tic:.1f} sec")
+                print(f"Construct Pl: {perf_counter() - tic:.1f} sec")
             tic = perf_counter()
 
         else:
-            self.Pl = Pl
+            pass
 
         # restore the total mask
-        self.mask = np.asarray(mask, bool)
-        self.ipok = np.arange(npixtot)[mask]
-        self.npix = len(self.ipok)
+        self.maskA = np.asarray(maskA, bool)
+        self.maskB = np.asarray(maskB, bool)
         
-        if Fmask is not None:
-            ipix = np.arange(hp.nside2npix(self.nside))
-            pix_map = np.isin(ipix[Fmask], ipix[mask])
-            nF = np.count_nonzero(Fmask)
-            assert self.nstokes*nF == F.shape[0]
-            self.MF = np.zeros((self.nstokes * self.npix, F.shape[1]))
-            for i in range(self.nstokes):
-                self.MF[i * self.npix: (i + 1) * self.npix] = F[i * nF:(i + 1) * nF, :][pix_map]
-            self.Pl = clibcov.FilterPl(self.Pl, self.MF)
+        self.ipokA = np.arange(npixtot)[self.maskA]
+        self.npixA = np.count_nonzero(self.maskA)
+        self.ipokB = np.arange(npixtot)[self.maskB]
+        self.npixB = np.count_nonzero(self.maskB)
+        # Pl has the extended shape, and is symmetric
+        # self.Pl can be rectangular, and has masking/filter applied.
+        if FA is not None or FB is not None or np.any(maskA != maskB):
+            self.MF_A = self.get_MF(self.maskA, FA, FAmask, mask_ext)
+            self.MF_B = self.get_MF(self.maskB, FB, FBmask, mask_ext)
+            self.Pl = clibcov.FilterPl(Pl, self.MF_A, self.MF_B)
             if verbose:
                 print(f"Filter Pl: {perf_counter() - tic:.1f} sec")
             tic = perf_counter()
+        else:
+            self.Pl = Pl
+        if np.all(clth==0):
+            self.SA = np.zeros((self.nstokes*self.npixA, self.nstokes*self.npixA), dtype=np.float64)
+            self.SB = np.zeros((self.nstokes * self.npixB, self.nstokes*self.npixB), dtype=np.float64)
+            self.SAB = np.zeros((self.nstokes*self.npixA, self.nstokes*self.npixB), dtype=np.float64)
+        else:
+            P, Q = bins._bin_operators()
+            S = SignalCovMatrix(self.Pl, np.array([P.dot(clth[isp, :bins.lmax + 1]) for isp in
+                                                   self.ispecs]).ravel())
+            self.SAB = S
             
-        P, Q = bins._bin_operators()
-        self.S = SignalCovMatrix(self.Pl,
-                                 np.array([P.dot(clth[isp, :bins.lmax + 1]) for isp in self.ispecs]).ravel())
+            if not hasattr(self, 'MF_A') and not hasattr(self, 'MF_B'):
+                self.SA = self.SB = S
+            elif np.all(self.MF_A==self.MF_B):
+                self.SA = self.SB = S
+            else:
+                PlA = clibcov.FilterPl(Pl, self.MF_A, self.MF_A)
+                PlB = clibcov.FilterPl(Pl, self.MF_B, self.MF_B)
+                if verbose:
+                    print(f"Filter Pl separately for A and B: {perf_counter() - tic:.1f} sec")
+                tic = perf_counter()
+                self.SA = SignalCovMatrix(PlA, np.array([P.dot(clth[isp, :bins.lmax + 1]) for isp in
+                                                         self.ispecs]).ravel())
+                self.SB = SignalCovMatrix(PlB, np.array([P.dot(clth[isp, :bins.lmax + 1]) for isp in
+                                                         self.ispecs]).ravel())
+        del Pl
         if verbose:
-            print(f"Construct S (npix={len(ipok)}): {perf_counter() - tic:.1f} sec")
+            print(f"Construct S: {perf_counter() - tic:.1f} sec")
         tic = perf_counter()
         
         if NA is not None:
             self.construct_esti(NA=NA, NB=NB, verbose=verbose, thread=True)
         if verbose:
             print(f"Construct estimator: {perf_counter()-tic:.1f} sec")
+    
+    def get_MF(self, mask, F, Fmask, mask_ext):
+        """
+        compute the masking-filter matrix, shape(npix, npix_ext)
+        Parameters
+        ----------
+        F
+        Fmask
+        mask
+        mask_ext
+        Returns
+        -------
 
+        """
+        def maskM(mask1, mask2):
+            """
+            mask1 is a subset of mask2
+            Parameters
+            ----------
+            mask1
+            mask2
+
+            Returns
+            -------
+            np.ndarray shape (nstokes*npix1, nstoks*npix2)
+            """
+            npix1 = np.count_nonzero(mask1)
+            npix2 = np.count_nonzero(mask2)
+            out = np.zeros((self.nstokes*npix1, self.nstokes*npix2), dtype=np.float64)
+            ipix = np.arange(hp.nside2npix(self.nside))
+            pix_map = np.isin(ipix[mask2], ipix[mask1], )
+            for i in range(self.nstokes):
+                s_ = np.s_[np.arange(npix1) + i * npix1, np.arange(npix2)[pix_map] + i * npix2]
+                out[s_] = 1
+            return out
+        
+        if F is None:
+            return maskM(mask, mask_ext)
+        else:
+            M = maskM(Fmask, mask_ext) # npix_full X npix_ext
+            npix = np.count_nonzero(mask)
+            ipix = np.arange(hp.nside2npix(self.nside))
+            pix_map = np.isin(ipix[Fmask], ipix[mask])
+            nF = np.count_nonzero(Fmask)
+            assert self.nstokes * nF==F.shape[0]
+            MF = np.zeros((self.nstokes * npix, F.shape[1]))
+            for i in range(self.nstokes):
+                MF[i * npix: (i + 1) * npix] = F[i * nF:(i + 1) * nF, :][pix_map]
+            MF = np.dot(MF, M)
+            return MF
+    
     def construct_esti(self, NA, NB, verbose=False, thread=True):
         """
         Compute the inverse of the datasets pixel covariance matrices C,
@@ -175,24 +257,22 @@ class xQML(object):
         """
         
         # Invert (signalA + noise) matrix
-        invCa = xut.pd_inv(self.S + NA)
+        invCa = xut.pd_inv(self.SA + NA)
 
         # Invert (signalB + noise) matrix
-        invCb = xut.pd_inv(self.S + NB)
+        invCb = xut.pd_inv(self.SB + NB)
         
         # Compute El = Ca^-1.Pl.Cb^-1 (long)
-        self.El = El(invCa, invCb, self.Pl, openMP=True, thread=thread, verbose=verbose)
+        # Compute El = Cb^-1.Pl^T.Ca^-1 (long)
+        self.El = El(invCa, invCb, self.Pl, verbose=verbose)
         
         # Finally compute invW by inverting (longer)
-        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, openMP=True, thread=thread,
-                                                   verbose=verbose))
+        self.invW = linalg.inv(CrossWindowFunction(self.El, self.Pl, verbose=verbose))
         
         # Compute bias for auto
         if not self.cross:
             self.bias = biasQuadEstimator(NA, self.El)
-        # self.bias = biasQuadEstimator(self.NA, self.El)
-    
-        
+            
     def get_spectra(self, mapA, mapB=None):
         """
         Return the unbiased spectra
@@ -209,11 +289,12 @@ class xQML(object):
         # Define conditions based on the map size
         if self.cross:
             assert mapB is not mapA, "can't use the same map for cross spectra."
-        cond_sizeA = np.size(mapA)==self.nstokes * self.npix
-        dA = mapA if cond_sizeA else mapA[self.istokes][:, self.mask]
+        cond_sizeA = np.size(mapA)==self.nstokes * self.npixA
+        dA = mapA if cond_sizeA else mapA[self.istokes][:, self.maskA]
+
         if self.cross:
-            cond_sizeB = np.size(mapB)==self.nstokes * self.npix
-            dB = mapB if cond_sizeB else mapB[self.istokes][:, self.mask]
+            cond_sizeB = np.size(mapB)==self.nstokes * self.npixB
+            dB = mapB if cond_sizeB else mapB[self.istokes][:, self.maskB]
             yl = clibcov.yQuadEstimator(dA.ravel(), dB.ravel(), self.El)
         else:
             yl = clibcov.yQuadEstimator(dA.ravel(), dA.ravel(), self.El) - self.bias
@@ -235,11 +316,10 @@ class xQML(object):
         """
         # # Do Gll' = S^-1.El.S^-1.El'
         if self.cross:
-            # G = CrossGisherMatrix(self.El, self.S)
-            G = clibcov.CrossGisher(self.S, self.El)
+            G = clibcov.CrossGisher(self.SAB, self.El)
         else:
             # G = CrossGisherMatrix(self.El, self.S + self.NA)
-            G = clibcov.CrossGisher(self.S+ self.NA, self.El)
+            G = clibcov.CrossGisher(self.SAB+self.NA, self.El)
 
         # # Do V = W^-1.G.W^-1 + W^-1
         V = CovAB(self.invW, G)

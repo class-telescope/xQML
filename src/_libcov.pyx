@@ -12,13 +12,14 @@ np.import_array()
 
 cdef extern from "libcov.h":
     void set_threads(int n)
-    void yCy(int nl, int npix, double * dA, double * dB, double *El, double *Cl)
+    void yCy(int nl, int npixA, int npixB, double * dA, double * dB, double *El, double *Cl)
     
     void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l)
-    void build_Gisher(int nl, int npix, double *C, double *El, double *G)
-    void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El)
-    void filter_Pl(int nl, int npix, int npix_full, double *Pl, double * Pl_out, double * MF,);
-    void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
+    void build_Gisher(int nl, int npixA, int npixB, double *C, double *El, double *G)
+    void build_El(int nl, int npixA, int npixB, double *Pl, double *invCa, double *invCb, double *El)
+    void filter_Pl(int nl, int npixA, int npixB, int npix_ext, double *Pl,
+                   double * Pl_out, double * MF_A, double * MF_B,);
+    void build_Wll(int nl, int npixA, int npixB, double* El, double* Pl, double* Wll)
     void build_dSdC(int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC)
     int ispec2nspec(long *ispec)
     void dlss( double X, int s1, int s2, int lmax, double *d)
@@ -31,9 +32,9 @@ def py_set_threads(n):
 def yQuadEstimator(np.ndarray[double, ndim=1, mode="c"] dA,
                    np.ndarray[double, ndim=1, mode="c"] dB,
                    np.ndarray[double, ndim=3, mode="c"] El,):
-    nl, npix = El.shape[:2]
+    nl, npixB, npixA = El.shape[:3]
     yl = np.zeros(nl, dtype=np.float64)
-    yCy(nl, npix,
+    yCy(nl, npixA, npixB,
         <double*> np.PyArray_DATA(dA),
         <double*> np.PyArray_DATA(dB),
         <double*> np.PyArray_DATA(El),
@@ -46,6 +47,7 @@ def dSdC(nside, nstokes,
          np.ndarray[long, ndim=1, mode="c"] ipix not None,
          np.ndarray[double, ndim=1, mode="c"] bl not None):
     npix = ipix.shape[0]
+    
     npixtot = npix * nstokes
     nbins = ellbins.shape[0] - 1
     nspec = ispec2nspec(<long *>np.PyArray_DATA(ispec))
@@ -62,9 +64,9 @@ def dSdC(nside, nstokes,
 def ComputeEl(np.ndarray[double, ndim=2, mode="c"] invCa not None,
               np.ndarray[double, ndim=2, mode="c"] invCb not None,
               np.ndarray[double, ndim=3, mode="c"] Pl not None):
-    nl, npix = Pl.shape[:2]
-    El = np.zeros((nl, npix, npix), dtype=np.float64)
-    build_El(nl, npix,
+    nl, npixA, npixB = Pl.shape[:3]
+    El = np.zeros((nl, npixB, npixA), dtype=np.float64)
+    build_El(nl, npixA, npixB,
              <double*> np.PyArray_DATA(Pl),
              <double*> np.PyArray_DATA(invCa),
              <double*> np.PyArray_DATA(invCb),
@@ -72,15 +74,18 @@ def ComputeEl(np.ndarray[double, ndim=2, mode="c"] invCa not None,
     return El
 
 def FilterPl(np.ndarray[double, ndim=3, mode="c"] Pl not None,
-             np.ndarray[double, ndim=2, mode="c"] MF not None,
+             np.ndarray[double, ndim=2, mode="c"] MF_A not None,
+             np.ndarray[double, ndim=2, mode="c"] MF_B not None,
              ):
-    nl, npix_full = Pl.shape[:2]
-    npix = MF.shape[0]
-    Pl_out = np.zeros((nl, npix, npix), dtype=np.float64)
-    filter_Pl(nl, npix, npix_full,
+    nl, npix_ext = Pl.shape[:2]
+    npixA = MF_A.shape[0]
+    npixB = MF_B.shape[0]
+    Pl_out = np.zeros((nl, npixA, npixB), dtype=np.float64)
+    filter_Pl(nl, npixA, npixB, npix_ext,
               <double*> np.PyArray_DATA(Pl),
               <double*> np.PyArray_DATA(Pl_out),
-              <double*> np.PyArray_DATA(MF))
+              <double*> np.PyArray_DATA(MF_A),
+              <double*> np.PyArray_DATA(MF_B),)
     return Pl_out
 
 def CrossGisher(np.ndarray[double, ndim=2, mode="c"] C not None,
@@ -88,19 +93,19 @@ def CrossGisher(np.ndarray[double, ndim=2, mode="c"] C not None,
     """
     compute the diagonal component of the Cl covariance matrix.
     """
-    nl, npix = El.shape[:2]
+    nl, npixB, npixA = El.shape[:3]
     Gl = np.zeros((nl, nl), dtype=np.float64)
-    build_Gisher(nl, npix,
-              <double *>np.PyArray_DATA(C),
-              <double *>np.PyArray_DATA(El),
-              <double *>np.PyArray_DATA(Gl))
+    build_Gisher(nl, npixA, npixB,
+                 <double *>np.PyArray_DATA(C),
+                 <double *>np.PyArray_DATA(El),
+                 <double *>np.PyArray_DATA(Gl))
     return Gl
 
 def CrossWindow(np.ndarray[double, ndim=3, mode="c"] El not None,
                 np.ndarray[double, ndim=3, mode="c"] Pl not None):
-    nl, npix = Pl.shape[:2]
+    nl, npixA, npixB = Pl.shape[:3]
     Wll = np.zeros((nl, nl), dtype=np.float64)
-    build_Wll(nl, npix,
+    build_Wll(nl, npixA, npixB,
               <double*> np.PyArray_DATA(El),
               <double*> np.PyArray_DATA(Pl),
               <double*> np.PyArray_DATA(Wll))

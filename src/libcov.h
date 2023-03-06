@@ -16,16 +16,16 @@
 #define halfpi M_PI/2.
 
 void set_threads(int n);
-void yCy(int nl, int npix, double* dA, double* dB, double *El, double *Cl);
+void yCy(int nl, int npixA, int npixB, double* dA, double* dB, double *El, double *Cl);
 void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double *E_l);
 
-void build_Gisher(int nl, int npix, double *C, double *El, double *G);
+void build_Gisher(int nl, int npixA, int npixB, double *C, double *El, double *G);
 
-void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El);
+void build_El(int nl, int npixA, int npixB, double *Pl, double *invCa, double *invCb, double *El);
 
-void filter_Pl(int nl, int npix, int npix_full, double *Pl, double *Pl_out, double *MF);
+void filter_Pl(int nl, int npixA, int npixB, int npix_ext, double *Pl, double *Pl_out, double *MF_A, double *MF_B);
 
-void build_Wll( int nl, int npix, double* El, double* Pl, double* Wll);
+void build_Wll( int nl, int npixA, int npixB, double* El, double* Pl, double* Wll);
 
 void build_dSdC( int nside, int nstokes, int npix, int inl, long *ispec, long *ellbins, long *ipix, double *bl, double* dSdC);
 /**

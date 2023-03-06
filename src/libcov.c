@@ -6,41 +6,45 @@ void set_threads(int n){
     }
 }
 
-void yCy(int nl, int npix, double* dA, double* dB, double *El, double *Cl){
-    int64_t npixtot = npix*npix;
-//    openblas_set_num_threads(1);
+void yCy(int nl, int npixA, int npixB, double* dA, double* dB, double *El, double *Cl){
+    int64_t npixtot = npixA*npixB;
     #pragma omp parallel
     {
-        double *tmp = (double *)malloc(sizeof(double)*npix);
+        double *tmp = (double *)malloc(sizeof(double)*npixB);
         #pragma omp for
         for(int i=0; i<nl; i++){
-            cblas_dgemv(CblasRowMajor,  CblasNoTrans,  npix, npix, 1, &El[i*npixtot], npix,  dB, 1,  0.0,  tmp, 1);
-            Cl[i] = cblas_ddot(npix, dA, 1, tmp, 1);
+            cblas_dgemv(CblasRowMajor, CblasNoTrans,  npixB, npixA, 1, &El[i*npixtot], npixA,  dA, 1,  0.0,  tmp, 1);
+            Cl[i] = cblas_ddot(npixB, dB, 1, tmp, 1);
         }
     }
 }
 
-void build_Gisher(int nl, int npix, double *C, double *El, double *G){
-    int64_t npixtot = npix*npix;
-    double *El_CAB =(double *)malloc(sizeof(double)*nl*npixtot);
-//    openblas_set_num_threads(1);
+void build_Gisher(int nl, int npixA, int npixB, double *C, double *El, double *G){
+    int64_t npixtotB = npixB*npixB;
+    int64_t npixtot = npixA*npixB;
+    double *El_CAB =(double *)malloc(sizeof(double)*nl*npixtotB);
     #pragma omp parallel
     {
         #pragma omp for
         for(int l=0; l<nl; l++){
-            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
-                npix, npix,
-                1, C, npix,
-                &El[l*npixtot], npix,
-                0, &El_CAB[l*npixtot], npix);
+//            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+//                npix, npix,
+//                1, C, npix,
+//                &El[l*npixtot], npix,
+//                0, &El_CAB[l*npixtot], npix);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                npixB, npixB, npixA,
+                1, &El[l*npixtot], npixA,
+                C, npixB,
+                0, &El_CAB[l*npixtotB], npixB);
         }
 
         #pragma omp for
         for(int l1=0; l1<nl; l1++){
             for(int l2=l1; l2<nl; l2++){
-                for(int i=0; i<npix; i++){
-                for(int j=0; j<npix; j++){
-                    G[l1*nl+l2] += El_CAB[l1*npixtot+i*npix+j]*El_CAB[l2*npixtot+j*npix+i];
+                for(int i=0; i<npixB; i++){
+                for(int j=0; j<npixB; j++){
+                    G[l1*nl+l2] += El_CAB[l1*npixtotB+i*npixB+j]*El_CAB[l2*npixtotB+j*npixB+i];
                 }
                 }
                 if(l2>l1){
@@ -71,46 +75,62 @@ void build_El_single(int npix, double *P_l, double *invCa, double *invCb, double
 }
 
 
-void build_El(int nl, int npix, double *Pl, double *invCa, double *invCb, double *El){
-    int64_t npixtot = npix*npix;
+void build_El(int nl, int npixA, int npixB, double *Pl, double *invCa, double *invCb, double *El){
+//    El shape: (nl, npixB, npixA)
+    int64_t npixtot = npixA*npixB;
 //    openblas_set_num_threads(1);
     #pragma omp parallel
     {
         double *tmp = (double *)malloc(sizeof(double)*npixtot);
         #pragma omp for
         for(int i=0; i<nl; i++){
-            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
-                        npix, npix,
-                        1, invCa, npix,
-                        &Pl[i*npixtot], npix,
-                        0, tmp, npix);
-            cblas_dsymm(CblasRowMajor, CblasRight, CblasUpper,
-                        npix, npix,
-                        1, invCb, npix,
-                        tmp, npix,
-                        0, &El[i*npixtot], npix);
+//            cblas_dsymm(CblasRowMajor, CblasLeft, CblasUpper,
+//                        npix, npix,
+//                        1, invCa, npix,
+//                        &Pl[i*npixtot], npix,
+//                        0, tmp, npix);
+//            cblas_dsymm(CblasRowMajor, CblasRight, CblasUpper,
+//                        npix, npix,
+//                        1, invCb, npix,
+//                        tmp, npix,
+//                        0, &El[i*npixtot], npix);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                  npixB, npixA, npixB, 1.0,
+                  invCb, npixB,
+                  &Pl[i*npixtot], npixB,
+                  0, tmp, npixA);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                  npixB, npixA, npixA, 1.0,
+                  tmp, npixA,
+                  invCa, npixA,
+                  0, &El[i*npixtot], npixA);
+
+
         }
         free(tmp);
    }
 }
 
-void filter_Pl(int nl, int npix, int npix_full, double *Pl, double *Pl_out, double *MF){
-    int64_t npixtot = npix*npix;
-    int64_t npixtot_full = npix_full*npix_full;
-//    MF shape (npix, npix_full)
+void filter_Pl(int nl, int npixA, int npixB, int npix_ext, double *Pl, double *Pl_out, double *MF_A, double *MF_B){
+    int64_t npixtot = npixA*npixB;
+    int64_t npixtot_full = npix_ext*npix_ext;
+//    MF_A shape (npixA, npix_ext)
+//    MF_B shape (npixB, npix_ext)
     #pragma omp parallel
     {
-        double *tmp = (double *)malloc(sizeof(double)*npix*npix_full);
+        double *tmp = (double *)malloc(sizeof(double)*npixA*npix_ext);
         #pragma omp for
         for(int i=0; i<nl; i++){
-              cblas_dsymm(CblasRowMajor, CblasRight, CblasUpper,
-                  npix, npix_full, 1.0, &Pl[i*npixtot_full], npix_full,
-                  MF, npix_full,
-                  0, tmp, npix_full);
+              cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                  npixA, npix_ext, npix_ext, 1.0,
+                  MF_A, npix_ext,
+                  &Pl[i*npixtot_full], npix_ext,
+                  0, tmp, npix_ext);
               cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-                  npix, npix, npix_full, 1.0, tmp, npix_full,
-                  MF, npix_full,
-                  0, &Pl_out[i*npixtot], npix);
+                  npixA, npixB, npix_ext, 1.0,
+                  tmp, npix_ext,
+                  MF_B, npix_ext,
+                  0, &Pl_out[i*npixtot], npixB);
 //            M Pl M^T
 //            = M L L^T M^T
 //            = (ML)(ML)^T
@@ -133,18 +153,20 @@ void filter_Pl(int nl, int npix, int npix_full, double *Pl, double *Pl_out, doub
 
 
 //problem of precision wrt python...
-void build_Wll(int nl, int npix, double* El, double* Pl, double* Wll)
+void build_Wll(int nl, int npixA, int npixB, double* El, double* Pl, double* Wll)
 {
-  int64_t npixtot = npix*npix;
+  int64_t npixtot = npixA*npixB;
   memset(Wll, 0., (nl*nl) * sizeof(double));
-  #pragma omp parallel default(none) shared(nl, npixtot, El, Pl, Wll)
+  #pragma omp parallel default(none) shared(nl, npixtot, npixA, npixB, El, Pl, Wll)
   {
     #pragma omp for
     for( int l1=0; l1<nl; l1++) {
       for( int l2=0; l2<nl; l2++) {
+        for( int p1=0; p1<npixA; p1++)
+            for( int p2=0; p2<npixB; p2++){
+                Wll[l1*nl+l2] += El[l1*npixtot+p2*npixA+p1]*Pl[l2*npixtot+p1*npixB+p2];
+            }
 
-        for( int p=0; p<npixtot; p++)
-            Wll[l1*nl+l2] += El[l1*npixtot+p]*Pl[l2*npixtot+ p];
       } //loop l2
     } //loop l1
     
