@@ -75,14 +75,19 @@ class xQML(object):
         # Map resolution (healpix)
         self.nside = hp.get_nside(maskA)
         npixtot = hp.nside2npix(self.nside)
-        # ipok are pixel indexes outside the mask
+
+        maskA = np.asarray(maskA, bool)
+        maskB = np.asarray(maskB, bool)
+        FAmask = np.asarray(FAmask, bool) if FAmask is not None else None
+        FBmask = np.asarray(FBmask, bool) if FBmask is not None else None
+        
         if FAmask is not None or FBmask is not None:
             _maskA = np.asarray(FAmask if FAmask is not None else maskA, bool)
             _maskB = np.asarray(FBmask if FBmask is not None else maskB, bool)
             if FAmask is not None:
                 assert np.all(FAmask[maskA]), "Filter A does not fully cover the mask region A"
             if FBmask is not None:
-                assert np.all(FBmask[maskB]), "Filter A does not fully cover the mask region A"
+                assert np.all(FBmask[maskB]), "Filter B does not fully cover the mask region B"
         else:
             _maskA = np.asarray(maskA, bool)
             _maskB = np.asarray(maskB, bool)
