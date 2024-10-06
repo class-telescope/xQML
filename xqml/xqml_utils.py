@@ -17,7 +17,8 @@ def pd_inv(a):
     '''
     n = a.shape[0]
     I = np.identity(n)
-    inv = linalg.solve(a, I, sym_pos=True, overwrite_b=True, )
+    # inv = linalg.solve(a, I, sym_pos=True, overwrite_b=True, )
+    inv = linalg.solve(a, I, assume_a='sym', overwrite_b=True, )
     return np.ascontiguousarray(inv)
 
 
