@@ -66,8 +66,11 @@ class xQML(object):
             set_threads(nthreads)
         self.bias = None
         self.cross = NB is not None
-        self.NA = NA.astype(np.float64)
-        self.NB = NB.astype(np.float64) if self.cross else self.NA
+        # NA/NB can both be None if we just need to compute Pl
+        if NA is not None:
+            self.NA = NA.astype(np.float64)
+        if NB is not None:
+            self.NB = NB.astype(np.float64) if self.cross else self.NA
         # Number of pixels in the mask
         # For example that would be good to have an assertion
         # on the mask size, just to check that it corresponds to a valid nside.
@@ -172,7 +175,7 @@ class xQML(object):
             
             if not hasattr(self, 'MF_A') and not hasattr(self, 'MF_B'):
                 self.SA = self.SB = S
-            elif np.all(self.MF_A==self.MF_B):
+            elif self.MF_A.shape==self.MF_B.shape and np.all(self.MF_A==self.MF_B):
                 self.SA = self.SB = S
             else:
                 PlA = clibcov.FilterPl(Pl, self.MF_A, self.MF_A)
